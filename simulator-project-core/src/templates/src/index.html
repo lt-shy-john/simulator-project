@@ -1,0 +1,9 @@
+{% extends "src/layout.html" %}
+
+{% block content %}
+    What chat room would you like to enter?<br>
+    <form method="POST">
+        <input id="room-name-input" name="name" type="text" size="100"><br>
+        <input id="room-name-submit" type="button" value="Enter">
+    </form>
+{% endblock content %}

@@ -1,0 +1,249 @@
+/* Reset CSS */
+/* http://meyerweb.com/eric/tools/css/reset/ 
+   v2.0 | 20110126
+   License: none (public domain)
+*/
+/* Keep them first */
+
+html, body, div, span, applet, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, acronym, address, big, cite, code,
+del, dfn, em, img, ins, kbd, q, s, samp,
+small, strike, strong, sub, sup, tt, var,
+b, u, i, center,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td,
+article, aside, canvas, details, embed, 
+figure, figcaption, footer, header, hgroup, 
+menu, nav, output, ruby, section, summary,
+time, mark, audio, video {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-size: 100%;
+	font: inherit;
+	vertical-align: baseline;
+}
+/* HTML5 display-role reset for older browsers */
+article, aside, details, figcaption, figure, 
+footer, header, hgroup, menu, nav, section {
+	display: block;
+}
+body {
+	line-height: 1;
+}
+ol, ul {
+	list-style: none;
+}
+blockquote, q {
+	quotes: none;
+}
+blockquote:before, blockquote:after,
+q:before, q:after {
+	content: '';
+	content: none;
+}
+table {
+	border-collapse: collapse;
+	border-spacing: 0;
+}
+
+/*@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';*/
+
+/* Global components */
+h1 {
+	font-size: 24pt;
+	font-weight: bold;
+}
+
+h2 {
+	font-size: 20pt;
+	font-weight: bold;
+}
+
+footer {
+	background-color: black;
+	padding: 50px 100px;
+
+	/* text */
+	color: #fff;
+	text-align: center;
+	vertical-align: middle;
+}
+
+.top {
+	background-color: black;
+	padding: 20px 100px;
+}
+
+#title {
+	min-height: 500px;
+	padding: 75px;
+
+	/* background-image: url('/20240807_110148.JPG'); */
+	-webkit-background-size: cover;
+    -moz-background-size: cover;
+    -o-background-size: cover;
+    background-size: cover;
+	background-repeat: no-repeat;
+	background-position-y: center;
+}
+
+#title > div {
+	padding: 50px;
+
+	background-color: rgba(255, 255, 255, 0.75);
+}
+
+#title > div > div {
+	display: inline-block;
+	padding: 10px;
+}
+
+#title h1 {
+	font-size: 48px;
+	padding-bottom: 40px;
+}
+
+#title h2 {
+	font-size: 36px;
+	padding-bottom: 25px;
+}
+
+#title p {
+	padding: 20px;
+}
+
+.normal-container {
+	margin: 20px 10px;
+	min-height: 500px;
+	padding: 50px;
+}
+
+.normal-container > div {
+	padding: 0px;
+}
+
+.content {
+	padding-left: 20px;
+}
+
+.crud-header {
+	display: inline-grid;
+	margin: 10px;
+}
+
+/* console widgets */
+.tab-group {
+	margin: 15px;
+	padding: 20px;
+	display: inline-block;
+
+	width: 50%;
+	max-width: 50%;
+
+	border: 2px solid rgb(110, 110, 110);
+	border-radius: 5px;
+}
+
+.service {
+	display: inline-block;
+
+	width: 50%;
+	max-width: 50%;
+}
+
+.service * {
+	display: inline-block;
+	vertical-align: middle;
+	padding: 5px;
+	padding-left: 0;
+}
+
+/* Table - Common */
+
+.normal-table {
+	overflow: auto;
+	margin: 30px auto;
+	min-height: 200px;
+	display: 'flex';
+	flexDirection: 'column';
+}
+
+.normal-table table {
+    border: 1px none #dededf;
+    height: 100%;
+    width: 90%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    border-spacing: 1px;
+
+    text-align: left;
+}
+
+.normal-table caption {
+    caption-side: top;
+    text-align: left;
+}
+
+.normal-table th {
+    border: 1px none #dededf;
+    background-color: #D9D9D9;
+    color: #000000;
+    padding: 5px;
+}
+
+.normal-table td {
+    border: 1px none #dededf;
+    background-color: #ffffff;
+    color: #000000;
+    padding: 5px;
+}
+
+/* Button - Home */
+.home-link {
+	color: #fff;
+}
+
+.home-link:link {
+	text-decoration: none;
+}
+
+/* Page Layout - Docs */
+#docs-main {
+	display:grid;
+	grid-template-columns: 2fr 8fr;
+	grid-template-rows: 1fr;
+	gap: 0px 0px; 
+	grid-template-areas: 
+    "side .";
+}
+.docs-sidebar {
+	grid-area: side; 
+
+	background-color: #f2f2f2;
+}
+
+/* Console */
+
+#console {
+	background-color: #18191B;
+	margin: 20px 0;
+	padding: 5px;
+
+	width: 100%;
+}
+
+#console-line{
+	padding-top: 5px;
+	padding-bottom: 5px;
+}
+
+#console-line p {
+	color: #fff;
+}
+
+/* Command line */

@@ -11,6 +11,7 @@ This is part of the whole 3-tier architecture:
 * Visualise your simulation
 
 ## Getting Started
+To install the packages use `npm install`. 
 
 Run `npm run dev` to start the development server. 
 

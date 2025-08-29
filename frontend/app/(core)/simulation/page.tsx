@@ -5,6 +5,7 @@ import '../../ui/global.css'
 
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 
 import { DataGrid, GridGetRowsParams, GridGetRowsResponse, GridRowParams, GridActionsCellItem, GridGetRowsError, GridUpdateRowError } from "@mui/x-data-grid";
 
@@ -31,7 +32,63 @@ const customDataSource: GridDataSource = {
     },
 }
 
+export interface DeleteConfirmProps {
+    open: boolean;
+    selectedRecord: string;
+    onClose: (value: string) => void;
+}
+
+async function deleteSimuData(id) {
+    const res = await fetch("http://localhost:8000/simulations/"+id+"/", {
+        method: "DELETE",
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+    });
+    if (!res.ok) {
+        console.log("Failed to delete data");
+        throw new Error("Failed to delete data");
+    }
+    console.log('Successfully deleted simulation ' + id + '.');
+}
+
+function DeleteConfirmDialog(props: DeleteConfirmProps) {
+    const { onClose, selectedRecord, open } = props;
+
+    const handleClose = () => {
+        onClose();
+    };
+
+    const handleCancelDelete = () => {
+        onClose();
+    };
+
+    const handleDelete = () => {
+        console.log('Deleting simulation' + selectedRecord + '.');
+        deleteSimuData(selectedRecord);
+        onClose(selectedRecord);
+    };
+
+    return (
+        <Dialog onClose={handleClose} open={open}>
+            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogContent dividers>
+                <Typography variant="body1">Please confirm you are deleting this simulation set. </Typography>
+            </DialogContent>
+            <DialogActions>
+                <Button autoFocus onClick={handleCancelDelete}>
+                    Cancel
+                </Button>
+                <Button onClick={handleDelete}>Confirm</Button>
+            </DialogActions>
+        </Dialog>
+    )
+}
+
 export default function Page() {
+    const [openDeleteDialogue, setOpenDeleteDialogue] = useState(false);
+    const [deleteId, setdeleteId] = useState(null);
     function handleRunSimulation(data) {
         console.log('Running simulation ' + data.id + '.');
     }
@@ -41,9 +98,16 @@ export default function Page() {
     function handleViewSimulationSetting(data) {
         console.log('Redirecting to setting page simulation ' + data.id + '.');
     }
-    function handleDeleteSimulation(data) {
+
+    const handleDeleteSimulation = (data) =>  {
         console.log('Deleting simulation ' + data.id + '.');
+        setOpenDeleteDialogue(true);
+        setdeleteId(data.id);
     }
+
+    const handleDeleteClose = (value: string) => {
+        setOpenDeleteDialogue(false);
+    };
 
     const columns = [
         { field: "name", headerName: "Name", hideable: true, width: 150 },
@@ -93,6 +157,7 @@ export default function Page() {
                         }
                     }}
                     pageSizeOptions={[paginationModel['pageSize'], paginationModel['pageSize'] * 2, paginationModel['pageSize'] * 3]} />
+                <DeleteConfirmDialog selectedRecord={deleteId} open={openDeleteDialogue} onClose={handleDeleteClose}/>
             </div>
         </div>
     )

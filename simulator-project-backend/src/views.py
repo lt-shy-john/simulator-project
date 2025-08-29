@@ -62,7 +62,7 @@ def patch_username(request):
                                  description='Success')
         }
     )
-@api_view(['GET'])
+@api_view(['GET', 'DELETE'])
 @extend_schema(
         summary="Get simulation record",
         request=SimulationGetterSerializer,
@@ -72,10 +72,24 @@ def patch_username(request):
             404: OpenApiResponse(description='Simulation not found')
         }, methods=["POST"]
     )
-def get_simulation_by_id(request, id):
-    simulation = get_object_or_404(SimulationRun, pk=id)
-    serializer = SimulationGetterSerializer(simulation, context={'request': request})
-    return Response(serializer.data, status=status.HTTP_200_OK)
+@extend_schema(
+        summary="Delete simulation record",
+        request=SimulationGetterSerializer,
+        responses={
+            204: OpenApiResponse(response=SimulationGetterSerializer,
+                                 description='Deleted'),
+            404: OpenApiResponse(description='Simulation not found')
+        }, methods=["DELETE"]
+    )
+def get_delete_simulation_by_id(request, id):
+    if request.method == 'GET':
+        simulation = get_object_or_404(SimulationRun, pk=id)
+        serializer = SimulationGetterSerializer(simulation, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    elif request.method == 'DELETE':
+        simulation = get_object_or_404(SimulationRun, pk=id)
+        SimulationRun.objects.filter(pk=id).delete()
+        return Response(f"Simulation {id} has been deletd. ", status=status.HTTP_204_NO_CONTENT)
 
 @csrf_exempt
 @extend_schema(

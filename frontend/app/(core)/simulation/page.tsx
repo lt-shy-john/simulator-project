@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import '../../ui/global.css'
 
+import { useRouter } from 'next/navigation'
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
-
 import { DataGrid, GridGetRowsParams, GridGetRowsResponse, GridRowParams, GridActionsCellItem, GridGetRowsError, GridUpdateRowError } from "@mui/x-data-grid";
 
 interface GridDataSource {
@@ -89,11 +89,15 @@ function DeleteConfirmDialog(props: DeleteConfirmProps) {
 export default function Page() {
     const [openDeleteDialogue, setOpenDeleteDialogue] = useState(false);
     const [deleteId, setdeleteId] = useState(null);
+
+    const router = useRouter();
+
     function handleRunSimulation(data) {
         console.log('Running simulation ' + data.id + '.');
     }
     function handleViewSimulation(data) {
         console.log('Viewing simulation ' + data.id + '.');
+        router.push('/view-simulation/' + data.id);
     }
     function handleViewSimulationSetting(data) {
         console.log('Redirecting to setting page simulation ' + data.id + '.');

@@ -4,7 +4,7 @@ Frontend part of the simulation project. Making agent based simulations simple.
 
 This is part of the whole 3-tier architecture: 
 
-![](/public/docs/Summary%20Architecture.png)
+![](public/docs/Summary_Architecture.png)
 
 ## Features
 * Easy-to-use UI

@@ -4,7 +4,7 @@ Part of the whole simulation full stack system. This is a backend to manage your
 
 This is part of the whole 3-tier architecture: 
 
-![](/public/Summary%20Architecture.png)
+![](public/Summary_Architecture.png)
 
 ## Features
 

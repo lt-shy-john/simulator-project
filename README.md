@@ -10,7 +10,7 @@ This is a web app based agent based simulator. It is aimed to be easy to generat
 
 ## Tech Stack
 
-![Architecture](frontend/public/docs/Summary%20Architecture.png)
+![Architecture](frontend/public/docs/Summary_Architecture.png)
 
 ## FAQ
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { useForm } from "react-hook-form";
 import { useRouter } from 'next/navigation';
 import Button from '@mui/material/Button';
@@ -22,17 +22,19 @@ async function getSimuData(id: number) {
     }
 }
 
-export default function Page() {
+export default function Page({ params, }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
+    const { id } = use(params);
 
   return (
-    <div id='title'>
+      <div id='title'>
           <Typography variant="h3">Simulation</Typography>
-          <Typography variant="h4">Confirmation</Typography>
-          <p>Number of agents (N)</p>
-          <p>{formData['numberOfAgent']}</p>
-          <p>Simulation time (T)</p>
-          <p>{formData['simulationPeriod']}</p>
+          <Typography variant="h6">ID</Typography>
+          <Typography variant="body1">{id}</Typography>
+          <Typography variant="h6">Number of agents (N)</Typography>
+          <Typography variant="body1">{/*<p>{formData['numberOfAgent']}</p>*/}</Typography>
+          <Typography variant="h6">Simulation time (T)</Typography>
+          <Typography variant="body1">{/*<p>{formData['simulationPeriod']}</p>*/}</Typography>
     </div>
   )
 }

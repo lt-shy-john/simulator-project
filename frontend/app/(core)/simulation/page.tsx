@@ -87,10 +87,14 @@ function DeleteConfirmDialog(props: DeleteConfirmProps) {
 }
 
 export default function Page() {
+    const [displayDatagrid, setDisplayDatagrid] = useState(false);
     const [openDeleteDialogue, setOpenDeleteDialogue] = useState(false);
     const [deleteId, setdeleteId] = useState(null);
 
     const router = useRouter();
+
+    useEffect(() => { setTimeout(() => { setDisplayDatagrid(true); });}, []);
+
 
     function handleRunSimulation(data) {
         console.log('Running simulation ' + data.id + '.');
@@ -140,7 +144,7 @@ export default function Page() {
             <div className="crud-header"><Typography variant="h3">Simulation</Typography></div>
             <div className="crud-header"><Button variant="contained" href='/create-simulation'>Create</Button></div>
             <div style={{ display: 'flex', flexDirection: 'column', height: 400, width: '100%' }}>
-                <DataGrid columns={columns} dataSource={customDataSource} pagination onPaginationModelChange={setPaginationModel} 
+                {displayDatagrid && <DataGrid columns={columns} dataSource={customDataSource} pagination onPaginationModelChange={setPaginationModel}
                     initialState={{ columns: { columnVisibilityModel: { numberOfAgent: false, simulationPeriod: false } }, pagination: { paginationModel: paginationModel, rowCount: 0 } }}
                     onDataSourceError={(error) => {
                         if (error instanceof GridGetRowsError) {
@@ -160,7 +164,7 @@ export default function Page() {
                             console.groupEnd();
                         }
                     }}
-                    pageSizeOptions={[paginationModel['pageSize'], paginationModel['pageSize'] * 2, paginationModel['pageSize'] * 3]} />
+                    pageSizeOptions={[paginationModel['pageSize'], paginationModel['pageSize'] * 2, paginationModel['pageSize'] * 3]} /> }
                 <DeleteConfirmDialog selectedRecord={deleteId} open={openDeleteDialogue} onClose={handleDeleteClose}/>
             </div>
         </div>

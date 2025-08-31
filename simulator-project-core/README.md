@@ -2,9 +2,9 @@
 
 Part of the whole simulation full stack system. This is a backend to manage your simulations. 
 
-This is part of the whole 3-tier architecture: 
+This is part of the whole 3-tier architecture:
 
-![](public/Summary_Architecture.png)
+![](../frontend/public/docs/Summary_Architecture.png)
 
 ## Features
 

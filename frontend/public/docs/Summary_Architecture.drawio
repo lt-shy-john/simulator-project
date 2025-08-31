@@ -1,6 +1,6 @@
-<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36" version="28.1.1">
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36" version="28.1.2">
   <diagram name="Page-1" id="NQ9SlEQo75kLHiaXl8XJ">
-    <mxGraphModel dx="1426" dy="846" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="690" pageHeight="591" math="0" shadow="0">
+    <mxGraphModel dx="1426" dy="846" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="984" pageHeight="787" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -11,30 +11,30 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="PJhSbcQMCHO_07woLFYN-2" value="&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;simulation-project-frontend&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;Front end" style="rounded=0;whiteSpace=wrap;html=1;spacingTop=40;" parent="1" vertex="1">
-          <mxGeometry x="240" y="40" width="200" height="120" as="geometry" />
+          <mxGeometry x="370" y="150" width="200" height="120" as="geometry" />
         </mxCell>
         <mxCell id="PJhSbcQMCHO_07woLFYN-3" value="" style="sketch=0;pointerEvents=1;shadow=0;dashed=0;html=1;strokeColor=none;fillColor=#434445;aspect=fixed;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;align=center;outlineConnect=0;shape=mxgraph.vvd.web_browser;" parent="1" vertex="1">
-          <mxGeometry x="315" y="60" width="50" height="35.5" as="geometry" />
+          <mxGeometry x="445" y="170" width="50" height="35.5" as="geometry" />
         </mxCell>
         <mxCell id="PJhSbcQMCHO_07woLFYN-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="PJhSbcQMCHO_07woLFYN-4" target="PJhSbcQMCHO_07woLFYN-7" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="PJhSbcQMCHO_07woLFYN-4" value="simulation-project-core&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Manages simulation runs&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;spacingTop=40;" parent="1" vertex="1">
-          <mxGeometry x="40" y="240" width="200" height="120" as="geometry" />
+        <mxCell id="PJhSbcQMCHO_07woLFYN-4" value="simulation-project-backend&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Manages simulation runs&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;spacingTop=40;" parent="1" vertex="1">
+          <mxGeometry x="170" y="350" width="200" height="120" as="geometry" />
         </mxCell>
         <mxCell id="PJhSbcQMCHO_07woLFYN-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="PJhSbcQMCHO_07woLFYN-6" target="PJhSbcQMCHO_07woLFYN-7" edge="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="520" y="400" />
-              <mxPoint x="140" y="400" />
+              <mxPoint x="650" y="510" />
+              <mxPoint x="270" y="510" />
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="PJhSbcQMCHO_07woLFYN-6" value="simulation-project-backend&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Runs the simulation&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;spacingTop=40;" parent="1" vertex="1">
-          <mxGeometry x="420" y="240" width="200" height="120" as="geometry" />
+        <mxCell id="PJhSbcQMCHO_07woLFYN-6" value="simulation-project-core&lt;div&gt;&lt;br&gt;&lt;div&gt;Runs the simulation&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;spacingTop=40;" parent="1" vertex="1">
+          <mxGeometry x="550" y="350" width="200" height="120" as="geometry" />
         </mxCell>
         <mxCell id="PJhSbcQMCHO_07woLFYN-7" value="Database" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" parent="1" vertex="1">
-          <mxGeometry x="110" y="430" width="60" height="80" as="geometry" />
+          <mxGeometry x="240" y="540" width="60" height="80" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

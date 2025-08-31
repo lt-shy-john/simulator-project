@@ -4,7 +4,7 @@ Part of the whole simulation full stack system. This is where the simulation hap
 
 This is part of the whole 3-tier architecture: 
 
-![](public/Summary_Architecture.png)
+![](../frontend/public/docs/Summary_Architecture.png)
 
 ## Features
 

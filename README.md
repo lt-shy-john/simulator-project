@@ -1,4 +1,5 @@
 # Agent Based Simulator
+[![![Figma](https://img.shields.io/badge/figma-%23F24E1E.svg?style=for-the-badge&logo=figma&logoColor=white)](https://www.figma.com/design/TBvv2v23gxd60YKJN6rGNQ/Agent-Based-Simulator)
 
 This is a web app based agent based simulator. It is aimed to be easy to generate agent based simulations and assists analysis and decision making on the models. 
 

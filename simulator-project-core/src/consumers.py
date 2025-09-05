@@ -47,7 +47,7 @@ class SimulationConsumer(ObserverModelInstanceMixin, GenericAsyncAPIConsumer):
         await self.send("Process finished. ")
 
     @action()
-    async def run(self, N=10, T=3, **kwargs):
+    async def run(self, N, T, **kwargs):
         simulation = Simulation(N, T, None, customLogger.gen_logging("", None))
         await self.send(f"N = {N}")
         for t in range(simulation.T):

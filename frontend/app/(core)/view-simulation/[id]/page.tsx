@@ -19,18 +19,26 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
     }, []);
 
     return (
-        <div id='title'>
-            <Typography variant="h3">Simulation</Typography>
-            {loading ? (<Typography variant="body1">Loading...</Typography>) : (
-                <>
-                    <Typography variant="h6">ID</Typography>
-                    <Typography variant="body1">{id}</Typography>
-                    <Typography variant="h6">Number of agents (N)</Typography>
-                    <Typography variant="body1">{simuData.numberOfAgent}</Typography>
-                    <Typography variant="h6">Simulation time (T)</Typography>
-                    <Typography variant="body1">{simuData.simulationPeriod}</Typography>
-                </>
-            ) }
-    </div>
+        <div className="normal-container">
+            <div className="crud-header"><Typography variant="h3">Simulation</Typography></div>
+            <div className="crud-header"><Button variant="outlined" href='/simulation'>Back</Button></div>
+            <div className="crud-header"><Button variant="contained" href='#'>Edit</Button></div>
+            <div>
+                {loading ? (<Typography variant="body1">Loading...</Typography>) : (
+                    <>
+                        <Typography variant="h6">ID</Typography>
+                        <Typography variant="body1">{id}</Typography>
+                        <Typography variant="h6">Number of agents (N)</Typography>
+                        <Typography variant="body1">{simuData.numberOfAgent}</Typography>
+                        <Typography variant="h6">Simulation time (T)</Typography>
+                        <Typography variant="body1">{simuData.simulationPeriod}</Typography>
+                        <Typography variant="h4">Run Records</Typography>
+                        <Typography variant="body1">Out soon</Typography>
+                    </>
+                )}
+            </div>
+        </div>
+            
+       
     )
 }

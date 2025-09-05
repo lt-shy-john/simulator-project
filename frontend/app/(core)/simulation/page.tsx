@@ -99,6 +99,7 @@ export default function Page() {
     function handleRunSimulation(data) {
         console.log('Running simulation ' + data.id + '.');
         sessionStorage.setItem('simuData', JSON.stringify(data));
+        router.push('/simulation/run/' + data.id);
     }
     function handleViewSimulation(data) {
         console.log('Viewing simulation ' + data.id + '.');

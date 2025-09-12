@@ -117,3 +117,4 @@ venv.bak/
 /simulator-project-backend/simulatorProjectBackend/__pycache__
 /simulator-project-backend/src/urls/__pycache__
 /simulator-project-backend/src/migrations/__pycache__
+/simulator-project-backend/simulatorProjectBackend/__pycache__

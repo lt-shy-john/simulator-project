@@ -114,3 +114,4 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+/simulator-project-backend/simulatorProjectBackend/__pycache__

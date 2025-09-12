@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Button, Typography } from "@mui/material";
 
 export default function Page({ params, }: { params: Promise<{ id: string }> }) {

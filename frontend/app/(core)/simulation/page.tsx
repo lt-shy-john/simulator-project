@@ -67,6 +67,7 @@ function DeleteConfirmDialog(props: DeleteConfirmProps) {
     const handleDelete = () => {
         console.log('Deleting simulation' + selectedRecord + '.');
         deleteSimuData(selectedRecord);
+        location.reload();
         onClose(selectedRecord);
     };
 
@@ -107,6 +108,7 @@ export default function Page() {
     }
     function handleViewSimulationSetting(data) {
         console.log('Redirecting to setting page simulation ' + data.id + '.');
+        router.push('/update-simulation/basic/' + data.id);
     }
 
     const handleDeleteSimulation = (data) =>  {

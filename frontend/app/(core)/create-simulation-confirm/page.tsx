@@ -51,6 +51,7 @@ export default function Page() {
         localStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
         console.log(localStorage);
         setSimuData({ ...formData, createdBy: { username: "johnyeung" } }); 
+        localStorage.removeItem('data');
         console.log("Data submitted.");
         router.push('/simulation');
     };

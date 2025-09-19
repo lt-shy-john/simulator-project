@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse, HttpResponseNotAllowed
@@ -95,6 +96,7 @@ def get_patch_delete_simulation_by_id(request, id):
         if 'createdBy' in request.data:
             # todo: check user if registered
             del request.data['createdBy']
+        request.data['updateDate'] = datetime.today().strftime('%Y-%m-%d')
         if serializer.is_valid():
             serializer.update(simulation, request.data)
             return Response(serializer.data, status=status.HTTP_200_OK)

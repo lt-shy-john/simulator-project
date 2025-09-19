@@ -56,15 +56,7 @@ def patch_username(request):
     return None
 
 @extend_schema(
-        summary="View existing simulation set by ID",
-        responses={
-            200: OpenApiResponse(response=SimulationGetterSerializer,
-                                 description='Success')
-        }
-    )
-@api_view(['GET', 'DELETE'])
-@extend_schema(
-        summary="Get simulation record",
+        summary="Get simulation record by ID",
         request=SimulationGetterSerializer,
         responses={
             200: OpenApiResponse(response=SimulationGetterSerializer,
@@ -81,11 +73,32 @@ def patch_username(request):
             404: OpenApiResponse(description='Simulation not found')
         }, methods=["DELETE"]
     )
-def get_delete_simulation_by_id(request, id):
+@extend_schema(
+        summary="Patch existing simulation set by ID",
+        request=SimulationGetterSerializer,
+        responses={
+            200: OpenApiResponse(response=SimulationGetterSerializer,
+                                 description='Success'),
+            204: OpenApiResponse(response=SimulationGetterSerializer,
+                                 description='No content'),
+        }, methods=["PATCH"]
+    )
+@api_view(['GET', 'DELETE', 'PATCH'])
+def get_patch_delete_simulation_by_id(request, id):
     if request.method == 'GET':
         simulation = get_object_or_404(SimulationRun, pk=id)
         serializer = SimulationGetterSerializer(simulation, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+    elif request.method == 'PATCH':
+        simulation = get_object_or_404(SimulationRun, pk=id)
+        serializer = SimulationGetterSerializer(simulation, context={'request': request}, data=request.data, partial=True)
+        if 'createdBy' in request.data:
+            # todo: check user if registered
+            del request.data['createdBy']
+        if serializer.is_valid():
+            serializer.update(simulation, request.data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     elif request.method == 'DELETE':
         simulation = get_object_or_404(SimulationRun, pk=id)
         SimulationRun.objects.filter(pk=id).delete()

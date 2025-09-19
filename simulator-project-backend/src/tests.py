@@ -26,7 +26,7 @@ class SimulationTestCase(TestCase):
         param = {'id': actual_id}
 
         # Act
-        response = self.client.get(reverse('Get simulation', kwargs=param))
+        response = self.client.get(reverse('Operation on simulation set  by ID', kwargs=param))
         response_body = json.loads(response.content)
 
         # Assert
@@ -39,7 +39,7 @@ class SimulationTestCase(TestCase):
         param = {'id': actual_id}
 
         # Act
-        response = self.client.get(reverse('Get simulation', kwargs=param))
+        response = self.client.get(reverse('Operation on simulation set  by ID', kwargs=param))
         response_body = json.loads(response.content)
 
         # Assert
@@ -80,6 +80,17 @@ class SimulationTestCase(TestCase):
         # Assert
         # We will forgive the error and log the issue, user should be added manually after
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def testPatchSimulationSuccess(self):
+        # Arrange
+        actual_id = 1
+        param = {'id': actual_id}
+
+        # Act
+        response = self.client.patch(reverse('Operation on simulation set  by ID', kwargs=param))
+        response_body = json.loads(response.content)
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def testPatchSimulationDateSuccess(self):
         # Arrange

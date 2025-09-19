@@ -22,17 +22,22 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
     console.log(watch());
 
     useEffect(() => {
-        fetch("http://localhost:8000/simulations/" + id).then(response => response.json()).then((json) => setSimuData(json));
-        setValue("numberOfAgent", simuData.numberOfAgent);
-        setValue("simulationPeriod", simuData.simulationPeriod);
-        setLoading(false);
+        fetch("http://localhost:8000/simulations/" + id).then(response => response.json()).then((json) => {
+            setSimuData(json);
+            setValue("numberOfAgent", json.numberOfAgent);
+            setValue("simulationPeriod", json.simulationPeriod);
+            setLoading(false); }
+        );
+        
+        
+        
     }, []);
 
     const onSubmit = (data: Inputs) => {
         const existing = localStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
         localStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
-        router.push('/update-simulation-confirm/basic/'+simuData.id);
+        router.push('/update-simulation-confirm/'+simuData.id);
     };
 
     return (

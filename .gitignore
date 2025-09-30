@@ -119,3 +119,4 @@ venv.bak/
 /simulator-project-backend/src/migrations/__pycache__
 simulator-project-core/simulationProject/__pycache__/__init__.cpython-313.pyc
 simulator-project-core/src/__pycache__/__init__.cpython-313.pyc
+simulator-project-core/src/__pycache__/__init__.cpython-313.pyc

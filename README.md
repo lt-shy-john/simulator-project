@@ -12,6 +12,8 @@
 
 This is a web app based agent based simulator. It is aimed to be easy to generate agent based simulations and assists analysis and decision making on the models. 
 
+<img src="frontend/public/docs/features.png" alt="Features" width="750"/>
+
 ## Install
 
 

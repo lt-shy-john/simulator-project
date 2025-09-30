@@ -36,7 +36,7 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
               {log.map((line, index) => <div key={index} id="console-line"><p>{line}</p></div>)}
           </div> }
       <div>
-        <Button variant="contained" onClick={() => router.back()}>
+        <Button variant="contained" onClick={() => router.push('/simulation')}>
           Back
         </Button>
       </div>

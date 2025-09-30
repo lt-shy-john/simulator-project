@@ -1,5 +1,7 @@
 import json
 import asyncio
+import subprocess
+import sys
 
 from channels.db import database_sync_to_async
 from channels.layers import get_channel_layer
@@ -48,12 +50,15 @@ class SimulationConsumer(ObserverModelInstanceMixin, GenericAsyncAPIConsumer):
 
     @action()
     async def run(self, N, T, **kwargs):
-        simulation = Simulation(N, T, None, customLogger.gen_logging("", None))
-        await self.send(f"N = {N}")
-        for t in range(simulation.T):
-            message = f"Success at {t + 1}th step. "
-            simulation.logger.info(message)
-            await self.send(message)
+        cmd = ['python', '-u', 'test_script.py', str(T)]
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+        await self.send("Running script. ")
+        while process.poll() is None:
+            line = process.stdout.readline()
+            if line:
+                print(line)
+                await self.send(line)
+                await asyncio.sleep(0.01)
         await self.send("Process finished. ")
 
     # @action()

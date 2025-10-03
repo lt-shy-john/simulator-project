@@ -40,17 +40,8 @@ class SimulationConsumer(ObserverModelInstanceMixin, GenericAsyncAPIConsumer):
         await super().disconnect(code)
 
     @action()
-    async def test(self, **kwargs):
-        for i in range(10):
-            await asyncio.sleep(1)
-            message = f"Success at {i+1}th step. "
-            print(message)
-            await self.send(message)
-        await self.send("Process finished. ")
-
-    @action()
     async def run(self, N, T, **kwargs):
-        cmd = ['python', '-u', 'test_script.py', str(T)]
+        cmd = ['python', '-u', '../simulator-project-simulator/simulator.py', str(N), str(T), 'run']
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
         await self.send("Running script. ")
         while process.poll() is None:

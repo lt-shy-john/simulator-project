@@ -16,16 +16,51 @@ This is a web app based agent based simulator. It is aimed to be easy to generat
 
 ## Install
 
+To start the service, you will need: 
+1. Under `frontend` folder, use the command `npm run dev`. 
+2. Under `simulator-project-backend`, use the command `py manage.py runserver`. 
+3. Under `simulator-project-core`, use the command `py manage.py runserver 8081`. This services uses port 8081. 
+
+Future state will see this is turned on through Docker. 
 
 ## Usage
-
+You can either
+* use the web app
+* simulate directly from simulator
 
 ## Tech Stack
 
 ![Architecture](frontend/public/docs/Summary_Architecture.png)
 
+### Front end 
+The front end uses Next.JS, a React framework. It allows a user-friendly experience to create, manage and analyse agent base model simulation. 
+
+### Back end
+This is a Django Rest Framework application and the database is part of this. 
+
+### Core
+This is a Django Channel Rest Framework application which aims to read from stdout from `simulation-project-simulator` and sends to `simulation-project-frontend`. 
+
+### Simulator
+This is a plain Python module with the simulation code. 
+
 ## FAQ
 
+
+## To-do
+* Front end error handling
+* Update simulation status (front end and core)
+* Pick-up running simulations
+* Authenication
+* Logo for this whole project
+* Simulation structure/ language
+* Documentations
+	* How to start simulation
+	* How to create simulation
+	* Other guides
+* Docker
+* 418 page (April fools)
+* Games corner (and other fun Easter eggs stuff)
 
 ## Contribute
 

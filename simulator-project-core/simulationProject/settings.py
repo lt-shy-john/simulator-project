@@ -88,7 +88,7 @@ DATABASES = {
     }
 }
 
-print(DATABASES['default']['NAME'])
+print(f'Database is located in: {DATABASES['default']['NAME']}.')
 
 
 # Password validation

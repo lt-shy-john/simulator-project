@@ -27,7 +27,7 @@ const customDataSource: GridDataSource = {
 
         return {
             rows: data,
-            rowCount: data.length,
+            //rowCount: data.length,
         };
     },
 }

@@ -7,7 +7,12 @@ import { useRouter } from 'next/navigation'
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Chip } from '@mui/material';
+import { grey } from '@mui/material/colors';
+import AlarmIcon  from '@mui/icons-material/Alarm';
 import { DataGrid, GridGetRowsParams, GridGetRowsResponse, GridRowParams, GridActionsCellItem, GridGetRowsError, GridUpdateRowError } from "@mui/x-data-grid";
+
+import SimuStatus from '../../components/SimuStatus';
 
 interface GridDataSource {
     /**
@@ -126,7 +131,18 @@ export default function Page() {
         { field: "numberOfAgent", headerName: "Number of Agents (N)", hideable: true, width: 150 },
         { field: "simulationPeriod", headerName: "Simulation Time (T)", hideable: true, width: 150 },
         { field: "createDate", headerName: "Creation Date", type: 'date', valueGetter: (value) => new Date(value), hideable: true, width: 150 },
-        { field: "status", headerName: "Status", hideable: false, width: 150 },
+        //{
+        //    field: "status", headerName: "Status", hideable: false, width: 150,
+        //    renderCell: (params) => {
+        //        return <Chip label={params.value} icon={<AlarmIcon />} label="Unknown" color={grey[100]} />;
+        //    },
+        //},
+        {
+            field: "status", headerName: "Status", hideable: false, width: 150,
+            renderCell: (params) => {
+                return <SimuStatus status={params.status} />;
+            },
+        },
         {
             field: "action", headerName: "Action", type: 'actions', width: 100,
             getActions: (params: GridRowParams) => [

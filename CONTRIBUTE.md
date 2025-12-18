@@ -14,6 +14,22 @@ Under the `app/` folder, there are two folders: `(core)`and `(docs)`. They are t
 
 The `app/ui` folder contains the global CSS definitions. Shall you need to create the styles please put them under the `global.css` file. 
 
+## Simulation Run
+
+```mermaid
+sequenceDiagram
+    participant Alice
+    participant Bob
+    Alice->>John: Hello John, how are you?
+    loop HealthCheck
+        John->>John: Fight against hypochondria
+    end
+    Note right of John: Rational thoughts <br/>prevail!
+    John-->>Alice: Great!
+    John->>Bob: How about you?
+    Bob-->>John: Jolly good!
+```
+
 ## Documentation Page (Front End)
 The documentations accessed by normal front end UI captures the knowledge base for using the application by normal means. While the markdown files here are meta instructions (e.g. maintain the code base). 
 
@@ -36,4 +52,15 @@ You can add a page under `/frontend/content/docs/` or its subfolders. The pages 
 	If `"simulation"` is the child folder. 
 
 ### Add Images
-The images are located from `/public`. Hence when refering them use this as the root folder. For example, documentations are has a path of `/docs/<img-file>`. 
+The images are located from `/public`. Hence when refering them use this as the root folder. For example, documentations are has a path of `/docs/<img-file>`.
+
+
+
+
+
+
+
+
+
+
+

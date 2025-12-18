@@ -63,4 +63,17 @@ The images are located from `/public`. Hence when refering them use this as the 
 
 
 
+## Simulation Inventory Database
 
+There are 2 databases which is used in this solution: 
+* Relational database which records the stock of the simulations
+* A NoSQL database (probably MongoDB) to store the simulation details or logs (Not implemented)
+
+This section is dedicated to the relational database. 
+
+```mermaid
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE-ITEM : contains
+    CUSTOMER }|..|{ DELIVERY-ADDRESS : uses
+```

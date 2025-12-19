@@ -18,16 +18,19 @@ The `app/ui` folder contains the global CSS definitions. Shall you need to creat
 
 ```mermaid
 sequenceDiagram
-    participant Alice
-    participant Bob
-    Alice->>John: Hello John, how are you?
-    loop HealthCheck
-        John->>John: Fight against hypochondria
+    participant frontend
+    participant simulator-project-backend
+    participant simulation-project-core
+    participant simulator-project-simulation
+    participant db.sqlite3@{ "type" : "database" }
+    Note right of frontend: Front end already <br/>obtained simulation <br/>ID from param
+    frontend->>simulator-project-backend: Create new run record
+    simulator-project-backend->>db.sqlite3: Store new run record
+    loop SimulationRun
+        simulator-project-simulation->>simulator-project-simulation: Run simulation
     end
-    Note right of John: Rational thoughts <br/>prevail!
-    John-->>Alice: Great!
-    John->>Bob: How about you?
-    Bob-->>John: Jolly good!
+    simulator-project-simulation->>simulation-project-core: Send stdout
+    simulation-project-core->>frontend: Send message
 ```
 
 ## Documentation Page (Front End)

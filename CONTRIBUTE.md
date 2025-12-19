@@ -17,6 +17,17 @@ The `app/ui` folder contains the global CSS definitions. Shall you need to creat
 ## Simulation Run
 
 ```mermaid
+stateDiagram-v2
+    UNDETERMINED
+    [*] --> Created
+    Created --> IN_PROGRESS
+    Created --> Error
+    IN_PROGRESS --> Done
+    Done --> [*]
+    Error --> [*]
+```
+
+```mermaid
 sequenceDiagram
     autonumber
     actor user

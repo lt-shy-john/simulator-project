@@ -18,20 +18,70 @@ The `app/ui` folder contains the global CSS definitions. Shall you need to creat
 
 ```mermaid
 sequenceDiagram
+    autonumber
+    actor user
     participant frontend
     participant simulator-project-backend
     participant simulation-project-core
     participant simulator-project-simulation
     participant db.sqlite3@{ "type" : "database" }
-    Note right of frontend: Front end already <br/>obtained simulation <br/>ID from param
-    frontend->>simulator-project-backend: Create new run record
-    simulator-project-backend->>db.sqlite3: Store new run record
+    participant log file
+    user->>frontend: Access `/simulation/run/{id}`
+    Note right of user: Front end already <br/>obtained simulation <br/>ID from param
+    frontend->>simulator-project-backend: Create new run record, status: CREATED
+    simulator-project-backend-->>simulator-project-backend: Check if simulation exists (by ID)
+    alt Not found
+        simulator-project-backend-->>frontend: Status 404
+    else Success
+        simulator-project-backend->>db.sqlite3: Store new run record, status: CREATED
+    	db.sqlite3-->>simulator-project-backend: OK
+    	simulator-project-backend-->>frontend: Status 201
+    end
+    simulator-project-backend-->>simulator-project-backend: Check if simulation (by ID) is running
+    alt Something is running
+        simulator-project-backend-->>frontend: Status 409
+    	frontend->>log file: Get most recent file
+    	log file-->>frontend: Data
+    else
+        simulator-project-backend-->>frontend: Status 200
+        simulator-project-backend->>log file: Create a new log file
+    end
+    critical Establish a connection to simulator-project-simulation
+    frontend->>simulator-project-simulation: connect
+    simulator-project-simulation-->>frontend: connectionEstablished
+    option Network timeout
+        simulator-project-simulation-->>simulator-project-simulation: Log error
+        simulator-project-simulation->>simulator-project-backend: Return error
+        break when the booking process fails
+        simulator-project-backend-->>frontend: Show error message
+    	end
+        simulator-project-backend->>db.sqlite3: Update new run record, status: ERROR
+    end
+    par [Run simulation]
+    frontend->>simulator-project-simulation: `run()`
     loop SimulationRun
         simulator-project-simulation->>simulator-project-simulation: Run simulation
+        simulator-project-simulation->>log file: Write log lines
     end
+    and [Update run record as in progress]
+    frontend->>simulator-project-backend: Update new run record, status: IN_PROGRESS
+    simulator-project-backend->>db.sqlite3: Modify run record from run ID, status: IN_PROGRESS
+    db.sqlite3-->>simulator-project-backend: OK
+    simulator-project-backend-->>frontend: Status 200
+    end    
+    loop Show simulation run logs
     simulator-project-simulation->>simulation-project-core: Send stdout
     simulation-project-core->>frontend: Send message
+    end
+    frontend->>simulator-project-simulation: disconnect
+    simulator-project-simulation-->>frontend: connectionClosed
+    frontend->>simulator-project-backend: Update new run record, status: DONE
+    simulator-project-backend->>db.sqlite3: Update new run record, status: DONE
+    db.sqlite3-->>simulator-project-backend: OK
+    simulator-project-backend-->>frontend: Status 200
 ```
+
+If the simulation run status is blank or anything else, the status should be `"Undertermined"`. 
 
 ## Documentation Page (Front End)
 The documentations accessed by normal front end UI captures the knowledge base for using the application by normal means. While the markdown files here are meta instructions (e.g. maintain the code base). 

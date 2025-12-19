@@ -7,13 +7,6 @@ This page serves as a knowledge base for maintaining the code base under this pr
 
 ![](frontend/public/docs/Summary_Architecture.png)
 
-## Structure of Front End 
-This application uses [App Router](https://nextjs.org/docs/app/getting-started/project-structure) from Next.JS. This defines the folder structure you see in here. 
-
-Under the `app/` folder, there are two folders: `(core)`and `(docs)`. They are the route groups. This dos not change the URL structure, but they are needed because they uses different root providers: The core uses a custom made provider, while the documentations are provided by FumaDocs. 
-
-The `app/ui` folder contains the global CSS definitions. Shall you need to create the styles please put them under the `global.css` file. 
-
 ## Simulation Run
 
 ```mermaid
@@ -93,6 +86,13 @@ sequenceDiagram
 ```
 
 If the simulation run status is blank or anything else, the status should be `"Undertermined"`. 
+
+## Structure of Front End 
+This application uses [App Router](https://nextjs.org/docs/app/getting-started/project-structure) from Next.JS. This defines the folder structure you see in here. 
+
+Under the `app/` folder, there are two folders: `(core)`and `(docs)`. They are the route groups. This dos not change the URL structure, but they are needed because they uses different root providers: The core uses a custom made provider, while the documentations are provided by FumaDocs. 
+
+The `app/ui` folder contains the global CSS definitions. Shall you need to create the styles please put them under the `global.css` file.
 
 ## Documentation Page (Front End)
 The documentations accessed by normal front end UI captures the knowledge base for using the application by normal means. While the markdown files here are meta instructions (e.g. maintain the code base). 

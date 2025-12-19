@@ -54,7 +54,7 @@ sequenceDiagram
     frontend->>simulation-project-core: connect
     simulation-project-core-->>frontend: connectionEstablished
     option Network timeout
-        simulator-project-simulation-->>log file: Log error
+        simulator-project-simulation->>log file: Log error
         simulator-project-simulation->>simulator-project-backend: Return error
         break when the booking process fails
         simulator-project-backend-->>frontend: Show error message

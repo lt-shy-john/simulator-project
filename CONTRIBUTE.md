@@ -47,7 +47,7 @@ sequenceDiagram
         simulator-project-backend->>log file: Create a new log file
     end
     critical Establish a connection to simulator-project-simulation
-    frontend->>simulator-project-core: connect
+    frontend->>simulation-project-core: connect
     simulation-project-core-->>frontend: connectionEstablished
     option Network timeout
         simulator-project-simulation-->>simulator-project-simulation: Log error

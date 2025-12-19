@@ -48,7 +48,6 @@ sequenceDiagram
     end
     critical Establish a connection to simulator-project-simulation
     frontend->>simulator-project-core: connect
-    activate simulator-project-core
     simulation-project-core-->>frontend: connectionEstablished
     option Network timeout
         simulator-project-simulation-->>simulator-project-simulation: Log error
@@ -75,7 +74,6 @@ sequenceDiagram
     simulation-project-core->>frontend: Send message
     end
     frontend->>simulator-project-simulation: disconnect
-    deactivate simulator-project-simulation
     simulator-project-simulation-->>frontend: connectionClosed
     frontend->>simulator-project-backend: Update new run record, status: DONE
     simulator-project-backend->>db.sqlite3: Update new run record, status: DONE

@@ -73,7 +73,7 @@ sequenceDiagram
     simulator-project-simulation->>simulation-project-core: Send stdout
     simulation-project-core->>frontend: Send message
     end
-    frontend->>-simulator-project-simulation: disconnect
+    frontend->>simulator-project-simulation: disconnect
     simulator-project-simulation-->>frontend: connectionClosed
     frontend->>simulator-project-backend: Update new run record, status: DONE
     simulator-project-backend->>db.sqlite3: Update new run record, status: DONE

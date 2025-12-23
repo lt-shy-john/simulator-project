@@ -30,36 +30,57 @@ sequenceDiagram
     participant simulator-project-simulation
     participant db.sqlite3@{ "type" : "database" }
     participant log file
-    user->>frontend: Access `/simulation/run/{id}`
-    Note right of user: Front end already <br/>obtained simulation <br/>ID from param
-    frontend->>simulator-project-backend: Create new run record, status: CREATED
-    simulator-project-backend-->>simulator-project-backend: Check if simulation exists (by ID)
-    alt Not found
-        simulator-project-backend-->>frontend: Status 404
-    else Success
-        simulator-project-backend->>db.sqlite3: Store new run record, status: CREATED
-    	db.sqlite3-->>simulator-project-backend: OK
-    	simulator-project-backend-->>frontend: Status 201
-    end
-    simulator-project-backend-->>simulator-project-backend: Check if simulation (by ID) is running
-    alt Something is running
-        simulator-project-backend-->>frontend: Status 409
-    	frontend->>log file: Get most recent file
-    	log file-->>frontend: Data
-    else
-        simulator-project-backend-->>frontend: Status 200
-        simulator-project-backend->>log file: Create a new log file
+    alt New simulation
+		user->>frontend: Access `/simulation/run/{id}`
+		Note right of user: Front end already <br/>obtained simulation <br/>ID from param
+		frontend->>simulator-project-backend: Create new run record, status: CREATED
+		simulator-project-backend-->>simulator-project-backend: Check if simulation exists (by ID)
+		alt Not found
+			simulator-project-backend-->>frontend: Status 404
+		else Success
+			simulator-project-backend->>db.sqlite3: Check if simulation (by ID) is running
+			db.sqlite3-->>simulator-project-backend: OK
+			alt Something is running
+				simulator-project-backend-->>frontend: Status 409
+				frontend->>log file: Get most recent file
+				log file-->>frontend: Data
+			else New simulation run
+				simulator-project-backend->>log file: Create a new log file
+				simulator-project-backend->>db.sqlite3: Store new run record, status: CREATED
+				db.sqlite3-->>simulator-project-backend: OK
+				simulator-project-backend-->>frontend: Status 201
+			end
+		end
+	else Running current simulation
+		user->>frontend: Access `/simulation/run/{id}`
+		Note right of user: Different action, <br/>so need a <br/>different endpoint. 
+		frontend->>simulator-project-backend: Check if simulation exists (by ID)
+		alt Not found
+			simulator-project-backend-->>frontend: Status 404
+		else Success
+			simulator-project-backend->>db.sqlite3: Check if simulation (by ID) is running
+			db.sqlite3-->>simulator-project-backend: OK
+			alt Something is running
+				simulator-project-backend-->>frontend: Status 200
+				frontend->>log file: Get most recent file
+				log file-->>frontend: Data
+			else New simulation run
+				simulator-project-backend->>log file: Create a new log file
+				simulator-project-backend->>db.sqlite3: Store new run record, status: CREATED
+				db.sqlite3-->>simulator-project-backend: OK
+				simulator-project-backend-->>frontend: Status 201
+			end
+		end
     end
     critical Establish a connection to simulator-project-simulation
     frontend->>simulation-project-core: connect
     simulation-project-core-->>frontend: connectionEstablished
     option Network timeout
-        simulator-project-simulation->>log file: Log error
-        simulator-project-simulation->>simulator-project-backend: Return error
-        break when the booking process fails
-        simulator-project-backend-->>frontend: Show error message
-    	end
+        simulation-project-core->>log file: Log error
+        simulation-project-core->>simulator-project-backend: Return error
         simulator-project-backend->>db.sqlite3: Update new run record, status: ERROR
+        db.sqlite3-->>simulator-project-backend: OK
+        simulator-project-backend-->>frontend: Show error message
     end
     par [Run simulation]
     frontend->>simulator-project-simulation: `run()`
@@ -141,9 +162,9 @@ The database called `db.sqlite3`, contains 6 tables which is shown below:
 
 ```mermaid
 erDiagram
-    simulationrun ||--o{ mode : uses
     simulationrun ||--o{ runrecord : runs
     runrecord ||--o{ file : generates
+    simulationrun ||--o{ mode : uses
     user ||--o{ simulationrun : owns
     mode ||--o{ mode_user : belongs
     user ||--o{ mode_user : generates

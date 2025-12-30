@@ -65,6 +65,8 @@ sequenceDiagram
 				frontend->>log file: Get most recent file
 				log file-->>frontend: Data
 			else New simulation run
+				simulator-project-backend->>db.sqlite3: Create new file records
+				db.sqlite3-->>simulator-project-backend: OK
 				simulator-project-backend->>log file: Create a new log file
 				simulator-project-backend->>db.sqlite3: Store new run record, status: CREATED
 				db.sqlite3-->>simulator-project-backend: OK

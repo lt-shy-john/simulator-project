@@ -9,6 +9,9 @@ This is part of the whole 3-tier architecture:
 ## Features
 
 ## Getting Started
+To start this application, please run `py manage.py runserver`. This will run the application under port `8000` the default port. 
+
+To check the OpenAPI/ Swagger docs, use `/api/schema/swagger-ui/`. This will provide the list of endpoints. By running into status 404 it will also lists the endpoints available. 
 
 ### Installation
 You need to install the following libraries

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Typography } from "@mui/material";
+import { Button, Typography } from '@mui/material';
 
 export default function Page({ params, }: { params: Promise<{ id: string }> }) {
     const [log, setLog] = useState([]);
@@ -27,19 +27,19 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
         };
   }, []);
 
-  return (
-    <div className="normal-container">
-      <div className="crud-header">
-              <Typography variant="h3">Run</Typography>
-      </div>      
-          {showLog && <div id="console">
-              {log.map((line, index) => <div key={index} id="console-line"><p>{line}</p></div>)}
-          </div> }
-      <div>
-        <Button variant="contained" onClick={() => router.push('/simulation')}>
-          Back
-        </Button>
-      </div>
-    </div>
-  )
+    return (
+        <div className="normal-container">
+            <div className="crud-header">
+                <Typography variant="h3">Run</Typography>
+            </div>
+            {showLog && <div id="console">
+                {log.map((line, index) => <div key={index} id="console-line"><p>{line}</p></div>)}
+            </div>}
+            <div>
+                <Button variant="contained" onClick={() => router.push('/simulation')}>
+                    Back
+                </Button>
+            </div>
+        </div>
+    );
 }

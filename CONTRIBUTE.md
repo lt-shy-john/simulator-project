@@ -8,6 +8,10 @@ This page serves as a knowledge base for maintaining the code base under this pr
 ![](frontend/public/docs/Summary_Architecture.png)
 
 ## Simulation Run
+A simulation run is the core of this project. It is a lifecycle of capturing the instructions and produce data files based on the simulation. To manage the simulations runs, each simulation run has a state. This is shown below: 
+
+> [!NOTE]
+> In this project, we use **simulation** to call the instructions and any metadata of the simulation itself. While we use **simulation run** to call each complete lifecycle of simulation attempts. So for each **simulation** we can have multiple **simulation runs**. 
 
 ```mermaid
 stateDiagram-v2
@@ -20,6 +24,14 @@ stateDiagram-v2
     Error --> [*]
 ```
 
+* **Created** is the start of each simulation run's lifecycle. It means a simulation run has been created. 
+* **In progress** means the simulation run is running. 
+* **Done** means the simulation run is completed and the data files has been exported (Some files has been progressively exported to its destination already). 
+* **Error** occurs when the simulation run has encountered an unchecked error with a non-zero exit code. This is one of the terminus 
+
+If the simulation does not have any status entailed onto it. It could be labeled as **undetermined**. 
+
+To start the simulation run, the user should enter from the page `simulation/run/{id}`. It has a complex process as stated below: 
 ```mermaid
 sequenceDiagram
     autonumber

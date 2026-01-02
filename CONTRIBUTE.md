@@ -179,6 +179,7 @@ erDiagram
     simulationrun ||--o{ runrecord : runs
     runrecord ||--o{ file : generates
     simulationrun ||--o{ mode : uses
+    user ||--o{ runrecord : runs
     user ||--o{ simulationrun : owns
     mode ||--o{ mode_user : belongs
     user ||--o{ mode_user : generates

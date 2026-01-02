@@ -13,7 +13,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .models import SimulationRun, RunsRecord, File, Mode
-from .serializers import UserSerializer, SimulationSetterSerializer, SimulationGetterSerializer, RunsRecordSetterSerializer, FileSetterSerializer, FileGetterSerializer, ModeSetterSerializer, ModeGetterSerializer
+from .serializers import UserSerializer, SimulationSetterSerializer, SimulationGetterSerializer, RunsRecordSetterSerializer, FileSetterSerializer, FileGetterSerializer, ModeSetterSerializer, ModeGetterSerializer, SimulationRunFullSerializer, SimulationRunSetterSerializer, SimulationRunStatusPatchSerializer
 
 # Create your views here.
 @api_view(['GET'])
@@ -217,4 +217,61 @@ def set_file(request):
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@extend_schema(
+        summary="Create new mode document",
+        request=SimulationRunSetterSerializer,
+        responses={
+            201: OpenApiResponse(response=SimulationRunSetterSerializer,
+                                 description='OK'),
+            400: OpenApiResponse(description='Invalid parameter'),
+            404: OpenApiResponse(description='Simulation run not found'),
+            409: OpenApiResponse(description='Simulation is running')
+        }
+    )
+@api_view(['POST'])
+def set_simulation_run(request):
+    serializer = SimulationRunSetterSerializer(data=request.data, context={'request': request})
+    if serializer.is_valid():
+        runRecord = serializer.save()
+        print("Saved instance PK:", runRecord.pk)
+        print("Exists in DB:", SimulationRun.objects.filter(pk=runRecord.pk).exists())
+        output_serialiser = SimulationRunFullSerializer(runRecord)
+        return Response(output_serialiser.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@extend_schema(
+        summary="View simulation run",
+        responses={
+            200: OpenApiResponse(response=SimulationRunFullSerializer,
+                                 description='OK'),
+            400: OpenApiResponse(description='Invalid parameter'),
+            404: OpenApiResponse(description='Simulation run not found')
+        }
+    )
+@api_view(['GET'])
+def view_simulation_run(request, id):
+    runRecord = get_object_or_404(RunsRecord, pk=id)
+    serializer = SimulationRunFullSerializer(runRecord, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+@extend_schema(
+        summary="Create new mode document",
+        request=SimulationRunStatusPatchSerializer,
+        responses={
+            200: OpenApiResponse(response=SimulationRunFullSerializer,
+                                 description='OK'),
+            400: OpenApiResponse(description='Invalid parameter'),
+            404: OpenApiResponse(description='Simulation run not found')
+        }
+    )
+@api_view(['PATCH'])
+def patch_simulation_run_status(request, id):
+    runsRecord = get_object_or_404(RunsRecord, pk=id)
+    request.data['status'] = request.data['status'].upper()
+    serializer = SimulationRunStatusPatchSerializer(runsRecord, context={'request': request}, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.update(runsRecord, request.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -285,6 +285,7 @@ class ModeTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def testPatchModeNonexistentLocation(self):
+        # Arrange
         actual_id = 1
         param = {'id': actual_id}
         request = {'simulation_id': 1, 'name': 'Mode name', 'location': 'wrong_location',
@@ -296,3 +297,52 @@ class ModeTestCase(TestCase):
 
         # Assert
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+class RunRecordsTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin_user, _ = User.objects.get_or_create(username='admin')
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def testSetSimulationRunSuccess(self):
+        # Arrange
+        request = {'simulation_id': 1, 'createdBy': {'username': 'admin'}}
+
+        # Act
+        response = self.client.post(reverse('Create simulation run'), request, format='json')
+        response_body = json.loads(response.content)
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def testViewSimulationRunSuccess(self):
+        # Act
+        response = self.client.get(reverse('View simulation run', args=[1]), format='json')
+        response_body = json.loads(response.content)
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def testPatchSimulationRunSuccess(self):
+        # Arrange
+        request = {'status': 'CREATED'}
+
+        # Act
+        response = self.client.patch(reverse('Update simulation run status', args=[1]), request, format='json')
+        response_body = json.loads(response.content)
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def testPatchSimulationRunSuccessWithLowerCase(self):
+        # Arrange
+        request = {'status': 'created'}
+
+        # Act
+        response = self.client.patch(reverse('Update simulation run status', args=[1]), request, format='json')
+        response_body = json.loads(response.content)
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

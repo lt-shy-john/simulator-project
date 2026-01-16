@@ -1,5 +1,7 @@
 from datetime import date
 
+from django.db import transaction
+
 from .models import User, SimulationRun, RunsRecord, File, Mode
 
 from rest_framework import serializers
@@ -144,37 +146,39 @@ class SimulationRunSetterSerializer(serializers.ModelSerializer):
         return obj.createdBy.username
 
 
-    def create(self, validated_data):
-        simulation_id = validated_data.pop("simulation_id")
-        created_by_data = validated_data.pop("createdBy")
-
-        # Lookup user
+    def validate(self, attrs):
         try:
-            user = User.objects.get(username=created_by_data["username"])
-        except User.DoesNotExist:
-            raise serializers.ValidationError(
-                {"createdBy": f"User {created_by_data['username']} does not exist"}
-            )
-
-        # Lookup simulation
-        try:
-            simulation = SimulationRun.objects.get(pk=simulation_id)
+            attrs["simulation"] = SimulationRun.objects.get(pk=attrs["simulation_id"])
         except SimulationRun.DoesNotExist:
-            raise serializers.ValidationError(
-                {"simulation_id": f"Simulation {simulation_id} does not exist"}
-            )
+            raise serializers.ValidationError({"simulation_id": "Simulation does not exist."})
 
-        # Generate id automatically (example: max+1)
-        max_id = RunsRecord.objects.aggregate(max_id=Max('id'))['max_id'] or 0
-        new_id = max_id + 1
+        try:
+            attrs["user"] = User.objects.get(username=attrs["createdBy"]["username"])
+        except User.DoesNotExist:
+            raise serializers.ValidationError({"createdBy": "User does not exist."})
 
-        return RunsRecord.objects.create(
-            id=new_id,
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        simulation = validated_data["simulation"]
+        user = validated_data["user"]
+
+        run = RunsRecord.objects.select_for_update().filter(
+            simulation=simulation,
+            status__in=[RunsRecord.Status.CREATED, RunsRecord.Status.IN_PROGRESS]
+        ).first()
+
+        if run:
+            return run, False
+
+        run = RunsRecord.objects.create(
             simulation=simulation,
             createdBy=user,
-            status='CREATED',
-            runTime=timezone.now()
+            runTime=timezone.now(),
+            status=RunsRecord.Status.CREATED
         )
+        return run, True
 
 class SimulationRunStatusPatchSerializer(serializers.ModelSerializer):
     class Meta:

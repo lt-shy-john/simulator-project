@@ -232,14 +232,20 @@ def set_file(request):
     )
 @api_view(['POST'])
 def set_simulation_run(request):
-    serializer = SimulationRunSetterSerializer(data=request.data, context={'request': request})
-    if serializer.is_valid():
-        runRecord = serializer.save()
-        print("Saved instance PK:", runRecord.pk)
-        print("Exists in DB:", SimulationRun.objects.filter(pk=runRecord.pk).exists())
-        output_serialiser = SimulationRunFullSerializer(runRecord)
-        return Response(output_serialiser.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer = SimulationRunSetterSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    run, created = serializer.save()
+
+    if not created:
+        return Response(
+            {"id": run.id, "detail": "Simulation already running"},
+            status=status.HTTP_409_CONFLICT
+        )
+
+    output = SimulationRunFullSerializer(run)
+    return Response(output.data, status=status.HTTP_201_CREATED)
 
 @extend_schema(
         summary="View simulation run",
@@ -268,8 +274,10 @@ def view_simulation_run(request, id):
     )
 @api_view(['PATCH'])
 def patch_simulation_run_status(request, id):
+    print('Start patching the simulation run for simulation run ID {id}. ')
     runsRecord = get_object_or_404(RunsRecord, pk=id)
     request.data['status'] = request.data['status'].upper()
+    print(f'ID: {id}, Status: {request.data['status']}')
     serializer = SimulationRunStatusPatchSerializer(runsRecord, context={'request': request}, data=request.data, partial=True)
     if serializer.is_valid():
         serializer.update(runsRecord, request.data)

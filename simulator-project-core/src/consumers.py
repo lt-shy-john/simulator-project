@@ -50,7 +50,10 @@ class SimulationConsumer(ObserverModelInstanceMixin, GenericAsyncAPIConsumer):
                 print(line)
                 await self.send(line)
                 await asyncio.sleep(0.01)
+
         await self.send("Process finished. ")
+
+        await self.close(code=1000)
 
     # @action()
     # async def join_room(self, pk, **kwargs):

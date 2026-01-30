@@ -18,7 +18,6 @@ class RunsRecord(models.Model):
         DONE = 'DONE', 'Done'
         ERROR = 'ERROR', 'Error'
         UNDETERMINED = 'UNDERTERMINED', 'Undetermined'
-    id = models.IntegerField(primary_key=True)
     simulation = models.ForeignKey(SimulationRun, on_delete=models.RESTRICT, null=True)
     status = models.TextField(choices=Status.choices,default=Status.UNDETERMINED)
     runTime = models.DateTimeField()

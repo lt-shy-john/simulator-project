@@ -1,11 +1,15 @@
 from datetime import date
 
+from django.db import transaction
+
 from .models import User, SimulationRun, RunsRecord, File, Mode
 
 from rest_framework import serializers
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import BadRequest
 from django.http import Http404
+from django.utils import timezone
+from django.db.models import Max
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -94,3 +98,89 @@ class ModeGetterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Mode
         fields = '__all__'
+
+class SimulationRunFullSerializer(serializers.ModelSerializer):
+    createdBy = UserSerializer(read_only=True)
+
+    class Meta:
+        model = RunsRecord
+        fields = '__all__'
+
+    def create(self, validated_data):
+        validated_data['status'] = "CREATED"
+        validated_data['runTime'] = date.today().strftime("%Y%m%d")
+        get_object_or_404(SimulationRun, pk=self.initial_data['simulation_id'])
+        try:
+            validated_data['createdBy'] = get_object_or_404(User, username=self.initial_data['createdBy']['username'])
+        except Http404 as e:
+            print(f'{e} User not found. ')
+        return super(SimulationRunFullSerializer, self).create(validated_data)
+
+class SimulationRunSetterSerializer(serializers.ModelSerializer):
+    # additional input
+    simulation_id = serializers.IntegerField(write_only=True)
+    createdBy = serializers.DictField(write_only=True)
+
+    # additional output fields
+    id = serializers.IntegerField(read_only=True)
+    simulation = serializers.PrimaryKeyRelatedField(read_only=True)
+    createdBy_username = serializers.SerializerMethodField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    runTime = serializers.DateTimeField(read_only=True)
+
+
+    class Meta:
+        model = RunsRecord
+        fields = [
+            "id",
+            "simulation",
+            "simulation_id",
+            "createdBy",
+            "createdBy_username",
+            "status",
+            "runTime"
+        ]
+
+
+    def get_createdBy_username(self, obj):
+        return obj.createdBy.username
+
+
+    def validate(self, attrs):
+        try:
+            attrs["simulation"] = SimulationRun.objects.get(pk=attrs["simulation_id"])
+        except SimulationRun.DoesNotExist:
+            raise serializers.ValidationError({"simulation_id": "Simulation does not exist."})
+
+        try:
+            attrs["user"] = User.objects.get(username=attrs["createdBy"]["username"])
+        except User.DoesNotExist:
+            raise serializers.ValidationError({"createdBy": "User does not exist."})
+
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        simulation = validated_data["simulation"]
+        user = validated_data["user"]
+
+        run = RunsRecord.objects.select_for_update().filter(
+            simulation=simulation,
+            status__in=[RunsRecord.Status.CREATED, RunsRecord.Status.IN_PROGRESS]
+        ).first()
+
+        if run:
+            return run, False
+
+        run = RunsRecord.objects.create(
+            simulation=simulation,
+            createdBy=user,
+            runTime=timezone.now(),
+            status=RunsRecord.Status.CREATED
+        )
+        return run, True
+
+class SimulationRunStatusPatchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RunsRecord
+        fields = ['status']

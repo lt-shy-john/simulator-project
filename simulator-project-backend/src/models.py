@@ -11,9 +11,17 @@ class SimulationRun(models.Model):
     createdBy = models.ForeignKey(User, on_delete=models.RESTRICT, null=True)
 
 class RunsRecord(models.Model):
-    id = models.IntegerField(primary_key=True)
+    class Status(models.TextChoices):
+        # Value stored in the database, Human-readable label
+        CREATED = 'CREATED', 'Created'
+        IN_PROGRESS = 'IN_PROGRESS', 'In progress'
+        DONE = 'DONE', 'Done'
+        ERROR = 'ERROR', 'Error'
+        UNDETERMINED = 'UNDERTERMINED', 'Undetermined'
     simulation = models.ForeignKey(SimulationRun, on_delete=models.RESTRICT, null=True)
+    status = models.TextField(choices=Status.choices,default=Status.UNDETERMINED)
     runTime = models.DateTimeField()
+    createdBy = models.ForeignKey(User, on_delete=models.RESTRICT, null=True)
 
 class File(models.Model):
     id = models.IntegerField(primary_key=True)

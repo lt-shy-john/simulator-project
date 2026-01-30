@@ -25,6 +25,5 @@ export default function SimuStatus(props) {
             icon = <Avatar sx={{ bgcolor: red[100], height: '28px', width: '28px' }}><ErrorOutlineIcon sx={{ color: red[500] }} /></Avatar>;
             break;
     }
-    console.log(color);
     return (<Chip sx={{ bgcolor: color }} icon={ icon } label={ label } />)
 }

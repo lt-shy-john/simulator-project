@@ -25,6 +25,7 @@ urlpatterns = [
     path('simulations/', include('src.urls.simulation')),
     path('files/', include('src.urls.file')),
     path('modes/', include('src.urls.mode')),
+    path('simulation-runs/', include('src.urls.simulation-run')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     # Optional UI:
     path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

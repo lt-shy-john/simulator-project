@@ -14,7 +14,7 @@
     "@types/mdx": "^2.0.13",
     "dayjs": "^1.11.13",
     "fumadocs-core": "^15.6.12",
-    "fumadocs-mdx": "^11.7.5",
+    "fumadocs-mdx": "^11.8.0",
     "fumadocs-ui": "15.6.12",
     "mermaid": "^11.10.0",
     "next": "^15.1.8",

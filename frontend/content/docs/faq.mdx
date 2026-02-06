@@ -8,3 +8,35 @@ import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
 <Accordions type="single">
   <Accordion title="What is Agent Based Simulator?">Agent Based Simulator is an easy to use tool to conduction simulations, inclusing agent based simulations. Users can manage the simulations and reuse them later, and analyse the data to make decisions better. </Accordion>
 </Accordions>
+
+## Simulation
+<Accordions type="single">
+  <Accordion title="Is simulation and simulation run are the same?">
+    A **simulation** contains the configurations of the simulation itself. Often it is mentioned with the data files created and any simulation runs associated from it. The simulation object should should be immutable but this system allows to update its instruction if needed. 
+
+    A **simulation run** is any runs from the simulation (definition/ instructions) itself. One simulation can have multiple simulation runs. 
+  </Accordion>
+</Accordions>
+<Accordions type="single">
+  <Accordion title="What are the simulation states?"> 
+    A simulation run may enter one of the lifecycle states: undetermined, created, in progress, done, error. Their relationship is shown below. 
+	<Mermaid
+	  chart="
+	stateDiagram-v2
+    UNDETERMINED
+    [*] --> Created
+    Created --> IN_PROGRESS
+    Created --> Error
+    IN_PROGRESS --> Done
+    Done --> [*]
+    Error --> [*]"
+	/>
+
+    * **Created** is the start of each simulation run's lifecycle. It means a simulation run has been created. 
+    * **In progress** means the simulation run is running. 
+    * **Done** means the simulation run is completed and the data files has been exported (Some files has been progressively exported to its destination already). 
+    * **Error** occurs when the simulation run has encountered an unchecked error with a non-zero exit code. This is one of the terminus 
+
+    If the simulation does not have any status entailed onto it. It could be labeled as **undetermined**. 
+  </Accordion>
+</Accordions>

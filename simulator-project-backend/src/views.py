@@ -14,7 +14,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .models import SimulationRun, RunsRecord, File, Mode
-from .serializers import UserSerializer, SimulationSetterSerializer, SimulationGetterSerializer, RunsRecordSetterSerializer, FileSetterSerializer, FileGetterSerializer, ModeSetterSerializer, ModeGetterSerializer, SimulationRunFullSerializer, SimulationRunSetterSerializer, SimulationRunStatusPatchSerializer
+from .serializers import UserSerializer, SimulationSetterSerializer, SimulationGetterSerializer, SimulationRunStatusGetRequestSerializer, SimulationRunStatusGetResponseSerializer, RunsRecordSetterSerializer, FileSetterSerializer, FileGetterSerializer, ModeSetterSerializer, ModeGetterSerializer, SimulationRunFullSerializer, SimulationRunSetterSerializer, SimulationRunStatusPatchSerializer
 
 log = getLogger(__name__)
 
@@ -162,6 +162,39 @@ def set_view_simulation(request):
     else:
         raise HttpResponseNotAllowed('POST')
 
+@extend_schema(
+        summary="View simulation run statuses",
+        request=SimulationRunStatusGetRequestSerializer,
+        responses={
+            200: OpenApiResponse(response=SimulationRunStatusGetResponseSerializer,
+                                 description='OK'),
+            400: OpenApiResponse(description='No simulation ID supplied'),
+        }
+    )
+@api_view(['POST'])
+def view_simulation_runs_status(request):
+    if type(request.data.get("simulation_id")) == list:
+        if len(request.data.get("simulation_id")) == 1:
+            log.info(f'Started view_simulation_runs_status for simulation ID {request.data.get("simulation_id")}.')
+        elif len(request.data.get("simulation_id")) > 1:
+            log.info(f'Started view_simulation_runs_status for simulation IDs {request.data.get("simulation_id")}.')
+        elif len(request.data.get("simulation_id")) == 0:
+            log.info(f'Started view_simulation_runs_status.')
+            raise Response('Simulation ID is empty', status=status.HTTP_400_BAD_REQUEST)
+    request.data['response_type'] = request.data.get('response_type').lower()
+    req = SimulationRunStatusGetRequestSerializer(data=request.data)
+    req.is_valid(raise_exception=True)
+
+    simulation_id = req.validated_data["simulation_id"]
+    response_type = req.validated_data["response_type"]
+
+    qs = RunsRecord.objects.filter(simulation_id=simulation_id).order_by("-runTime")
+
+    if response_type == "latest":
+        qs = qs[:1]
+
+    serializer = SimulationRunStatusGetResponseSerializer(qs, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 @csrf_exempt
 @api_view(['PATCH'])

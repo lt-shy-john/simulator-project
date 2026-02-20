@@ -40,8 +40,19 @@ class SimulationGetterSerializer(serializers.HyperlinkedModelSerializer):
         fields = ['id', 'name', 'numberOfAgent', 'simulationPeriod', 'createDate', 'createdBy']
 
 class SimulationRunStatusGetRequestSerializer(serializers.Serializer):
-    simulation_id = serializers.IntegerField()
+    simulation_id = serializers.JSONField()
     response_type = serializers.ChoiceField(choices=["latest", "all"])
+
+    def validate_simulation_id(self, value):
+        if isinstance(value, int):
+            return [value]
+
+        if isinstance(value, list) and all(isinstance(v, int) for v in value):
+            return value
+
+        raise serializers.ValidationError(
+            "simulation_id must be an integer or a list of integers."
+        )
 
 class SimulationRunStatusGetResponseSerializer(serializers.ModelSerializer):
     simulation_id = serializers.IntegerField(source="simulation.id")

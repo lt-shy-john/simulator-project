@@ -103,6 +103,17 @@ class SimulationTestCase(TestCase):
         # Assert
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    def testViewSimulationRunStatusListLatestSuccess(self):
+        # Arrange
+        request = {'simulation_id': [1,2,3], 'response_type': 'latest'}
+
+        # Act
+        response = self.client.post(reverse('Get simulation run status'), request, format='json')
+        response_body = json.loads(response.content)
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
     def testViewSimulationRunStatusNonexistentSimulationId(self):
         # Arrange
         request = {'simulation_id': 'a', 'response_type': 'latest'}
@@ -113,6 +124,17 @@ class SimulationTestCase(TestCase):
 
         # Assert
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def testViewSimulationRunStatusEmptySimulationId(self):
+        # Arrange
+        request = {'simulation_id': [], 'response_type': 'latest'}
+
+        # Act
+        response = self.client.post(reverse('Get simulation run status'), request, format='json')
+        response_body = json.loads(response.content)
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
     def testPatchSimulationSuccess(self):
         # Arrange

@@ -8,6 +8,8 @@ This is part of the whole 3-tier architecture:
 
 ## Features
 
+* Pagination is provided in GET `/simulation/` and GET `/simulation/simulation-runs/status` endpoints. Default page size is 10 and max page size is 500. Example use: `/simulations/?page=2&page_size=20` to move to page 2 and enlarge page size to 20 simulation records.
+
 ## Getting Started
 To start this application, please run `py manage.py runserver`. This will run the application under port `8000` the default port. 
 

@@ -1,21 +1,42 @@
 openapi: 3.0.3
 info:
-  title: Your Project API
+  title: Simulator Project Backend
   version: 1.0.0
-  description: Your project description
+  description: Backend operations of Agent Based Simulator
 paths:
   /files/:
     post:
       operationId: files_create
+      summary: Record file item on database
       tags:
       - files
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileSetter'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/FileSetter'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FileSetter'
+        required: true
       security:
       - cookieAuth: []
       - basicAuth: []
       - {}
       responses:
-        '200':
-          description: No response body
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileSetter'
+          description: Created
+        '400':
+          description: Invalid parameter
+        '404':
+          description: Simulation not found
   /files/{id}/:
     get:
       operationId: files_retrieve
@@ -37,15 +58,36 @@ paths:
   /modes/:
     post:
       operationId: modes_create
+      summary: Create new mode document
       tags:
       - modes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModeSetter'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ModeSetter'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ModeSetter'
+        required: true
       security:
       - cookieAuth: []
       - basicAuth: []
       - {}
       responses:
-        '200':
-          description: No response body
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModeSetter'
+          description: Created
+        '400':
+          description: Invalid parameter
+        '404':
+          description: Simulation not found
   /modes/{id}/:
     get:
       operationId: modes_retrieve
@@ -82,9 +124,110 @@ paths:
       responses:
         '200':
           description: No response body
+  /simulation-runs/:
+    post:
+      operationId: simulation_runs_create
+      summary: Create new mode document
+      tags:
+      - simulation-runs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulationRunSetter'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SimulationRunSetter'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SimulationRunSetter'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRunSetter'
+          description: OK
+        '400':
+          description: Invalid parameter
+        '404':
+          description: Simulation run not found
+        '409':
+          description: Simulation is running
+  /simulation-runs/{id}/:
+    get:
+      operationId: simulation_runs_retrieve
+      summary: View simulation run
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - simulation-runs
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRunFull'
+          description: OK
+        '400':
+          description: Invalid parameter
+        '404':
+          description: Simulation run not found
+  /simulation-runs/{id}/update-status:
+    patch:
+      operationId: simulation_runs_update_status_partial_update
+      summary: Create new mode document
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - simulation-runs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSimulationRunStatusPatch'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSimulationRunStatusPatch'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSimulationRunStatusPatch'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRunFull'
+          description: OK
+        '400':
+          description: Invalid parameter
+        '404':
+          description: Simulation run not found
   /simulations/:
     get:
       operationId: simulations_retrieve
+      summary: View existing simulation set
       tags:
       - simulations
       security:
@@ -93,18 +236,41 @@ paths:
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationGetter'
+          description: Success
     post:
       operationId: simulations_create
+      summary: Set new simulation set
       tags:
       - simulations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulationSetter'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SimulationSetter'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SimulationSetter'
+        required: true
       security:
       - cookieAuth: []
       - basicAuth: []
       - {}
       responses:
-        '200':
-          description: No response body
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationSetter'
+          description: Created
+        '400':
+          description: Invalid parameter
   /simulations/{id}/:
     get:
       operationId: simulations_retrieve_2
@@ -123,6 +289,69 @@ paths:
       responses:
         '200':
           description: No response body
+    patch:
+      operationId: simulations_partial_update
+      summary: Patch existing simulation set by ID
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - simulations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSimulationGetter'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSimulationGetter'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSimulationGetter'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationGetter'
+          description: Success
+        '204':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationGetter'
+          description: No content
+    delete:
+      operationId: simulations_destroy
+      summary: Delete simulation record
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - simulations
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationGetter'
+          description: Deleted
+        '404':
+          description: Simulation not found
   /simulations/{id}/update_date:
     patch:
       operationId: simulations_update_date_partial_update
@@ -141,18 +370,68 @@ paths:
       responses:
         '200':
           description: No response body
-  /users/:
+  /simulations/simulation-run/status:
     post:
-      operationId: users_create
+      operationId: simulations_simulation_run_status_create
+      summary: View simulation run statuses
       tags:
-      - users
+      - simulations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulationRunStatusGetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SimulationRunStatusGetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SimulationRunStatusGetRequest'
+        required: true
       security:
       - cookieAuth: []
       - basicAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRunStatusGetResponse'
+          description: OK
+        '400':
+          description: No simulation ID supplied
+  /users/:
+    post:
+      operationId: users_create
+      summary: Create new user
+      tags:
+      - users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/User'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/User'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: Created
+        '400':
+          description: Invalid parameter
   /users/{id}/:
     get:
       operationId: users_retrieve
@@ -208,6 +487,255 @@ paths:
         '200':
           description: No response body
 components:
+  schemas:
+    FileSetter:
+      type: object
+      properties:
+        filename:
+          type: string
+        simulation_id:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+          readOnly: true
+        location:
+          type: string
+        simulation:
+          allOf:
+          - $ref: '#/components/schemas/SimulationGetter'
+          readOnly: true
+      required:
+      - filename
+      - location
+      - simulation
+      - simulation_id
+    ModeSetter:
+      type: object
+      properties:
+        simulation_id:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+          readOnly: true
+        name:
+          type: string
+        location:
+          type: string
+        createdBy:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+      required:
+      - createdBy
+      - location
+      - name
+      - simulation_id
+    PatchedSimulationGetter:
+      type: object
+      properties:
+        id:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        name:
+          type: string
+        numberOfAgent:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        simulationPeriod:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        createDate:
+          type: string
+          format: date
+        createdBy:
+          $ref: '#/components/schemas/User'
+    PatchedSimulationRunStatusPatch:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+    ResponseTypeEnum:
+      enum:
+      - latest
+      - all
+      type: string
+      description: |-
+        * `latest` - latest
+        * `all` - all
+    SimulationGetter:
+      type: object
+      properties:
+        id:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        name:
+          type: string
+        numberOfAgent:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        simulationPeriod:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        createDate:
+          type: string
+          format: date
+        createdBy:
+          $ref: '#/components/schemas/User'
+      required:
+      - createDate
+      - createdBy
+      - id
+      - numberOfAgent
+      - simulationPeriod
+    SimulationRunFull:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        createdBy:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        runTime:
+          type: string
+          format: date-time
+        simulation:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+      required:
+      - createdBy
+      - id
+      - runTime
+    SimulationRunSetter:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        simulation:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          readOnly: true
+        simulation_id:
+          type: integer
+          writeOnly: true
+        createdBy:
+          type: object
+          additionalProperties: {}
+          writeOnly: true
+        createdBy_username:
+          type: string
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        runTime:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - createdBy
+      - createdBy_username
+      - id
+      - runTime
+      - simulation
+      - simulation_id
+      - status
+    SimulationRunStatusGetRequest:
+      type: object
+      properties:
+        simulation_id:
+          type: integer
+        response_type:
+          $ref: '#/components/schemas/ResponseTypeEnum'
+      required:
+      - response_type
+      - simulation_id
+    SimulationRunStatusGetResponse:
+      type: object
+      properties:
+        simulation_id:
+          type: integer
+        run_time:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+      required:
+      - run_time
+      - simulation_id
+    SimulationSetter:
+      type: object
+      properties:
+        name:
+          type: string
+        numberOfAgent:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        simulationPeriod:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+        createdBy:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+      required:
+      - createdBy
+      - numberOfAgent
+      - simulationPeriod
+    StatusEnum:
+      enum:
+      - CREATED
+      - IN_PROGRESS
+      - DONE
+      - ERROR
+      - UNDERTERMINED
+      type: string
+      description: |-
+        * `CREATED` - Created
+        * `IN_PROGRESS` - In progress
+        * `DONE` - Done
+        * `ERROR` - Error
+        * `UNDERTERMINED` - Undetermined
+    User:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+      required:
+      - username
   securitySchemes:
     basicAuth:
       type: http

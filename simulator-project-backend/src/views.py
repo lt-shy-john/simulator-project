@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.http import HttpResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
+from django.db.models import Max, Q
 
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
@@ -14,7 +15,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .models import SimulationRun, RunsRecord, File, Mode
-from .serializers import UserSerializer, SimulationSetterSerializer, SimulationGetterSerializer, RunsRecordSetterSerializer, FileSetterSerializer, FileGetterSerializer, ModeSetterSerializer, ModeGetterSerializer, SimulationRunFullSerializer, SimulationRunSetterSerializer, SimulationRunStatusPatchSerializer
+from .serializers import UserSerializer, SimulationSetterSerializer, SimulationGetterSerializer, SimulationRunStatusGetRequestSerializer, SimulationRunStatusGetResponseSerializer, RunsRecordSetterSerializer, FileSetterSerializer, FileGetterSerializer, ModeSetterSerializer, ModeGetterSerializer, SimulationRunFullSerializer, SimulationRunSetterSerializer, SimulationRunStatusPatchSerializer
+from .pagination import StandardResultsSetPagination
 
 log = getLogger(__name__)
 
@@ -148,8 +150,10 @@ def set_view_simulation(request):
     if request.method == 'GET':
         log.info(f'Received GET request for set_view_simulation.')
         simulations = SimulationRun.objects.all().order_by('id')
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(simulations, request)
         log.info(f'Received {simulations.count()} simulations in set_view_simulation().')
-        serializer = SimulationGetterSerializer(simulations, many=True, context={'request': request})
+        serializer = SimulationGetterSerializer(page, many=True, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
     elif request.method == 'POST':
         log.info(f'Received POST request for set_view_simulation.')
@@ -162,6 +166,65 @@ def set_view_simulation(request):
     else:
         raise HttpResponseNotAllowed('POST')
 
+@extend_schema(
+        summary="View simulation run statuses",
+        request=SimulationRunStatusGetRequestSerializer,
+        responses={
+            200: OpenApiResponse(response=SimulationRunStatusGetResponseSerializer,
+                                 description='OK'),
+            204: OpenApiResponse(response='Simulation ID is empty',
+                                 description='Simulation ID is empty'),
+            400: OpenApiResponse(description='No simulation ID supplied'),
+        }
+    )
+@api_view(['POST'])
+def view_simulation_runs_status(request):
+    if len(request.data.get("simulation_id")) == 1:
+        log.info(f'Started view_simulation_runs_status for simulation ID {request.data.get("simulation_id")}.')
+    elif len(request.data.get("simulation_id")) > 1:
+        log.info(f'Started view_simulation_runs_status for simulation IDs {request.data.get("simulation_id")}.')
+    elif len(request.data.get("simulation_id")) == 0:
+        log.info('Started view_simulation_runs_status.')
+        return Response('Simulation ID is empty', status=status.HTTP_204_NO_CONTENT)
+
+    request.data['response_type'] = request.data.get('response_type').lower()
+    serializer = SimulationRunStatusGetRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    simulation_ids = serializer.validated_data["simulation_id"]
+    response_type = serializer.validated_data["response_type"]
+
+    if response_type == "all":
+        qs = RunsRecord.objects.filter(
+            simulation_id__in=simulation_ids
+        ).order_by("-runTime")
+
+        found_ids = set(qs.values_list("simulation_id", flat=True))
+        missing_ids = set(simulation_ids) - found_ids
+
+        for sim_id in missing_ids:
+            log.info(f"No runs for simulation ID {sim_id} found.")
+    else:
+        records = []
+        for sim_id in simulation_ids:
+            latest = (
+                RunsRecord.objects
+                .filter(simulation_id=sim_id)
+                .order_by("-runTime")
+                .first()
+            )
+            if latest:
+                records.append(latest)
+            else:
+                log.info(f"No runs for simulation ID {sim_id} found.")
+
+        qs = records
+
+    paginator = StandardResultsSetPagination()
+    page = paginator.paginate_queryset(qs, request)
+
+    serializer = SimulationRunStatusGetResponseSerializer(page, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 @csrf_exempt
 @api_view(['PATCH'])

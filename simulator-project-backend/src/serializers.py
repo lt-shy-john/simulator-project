@@ -9,7 +9,6 @@ from django.shortcuts import get_object_or_404
 from django.core.exceptions import BadRequest
 from django.http import Http404
 from django.utils import timezone
-from django.db.models import Max
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -39,6 +38,29 @@ class SimulationGetterSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = SimulationRun
         fields = ['id', 'name', 'numberOfAgent', 'simulationPeriod', 'createDate', 'createdBy']
+
+class SimulationRunStatusGetRequestSerializer(serializers.Serializer):
+    simulation_id = serializers.JSONField()
+    response_type = serializers.ChoiceField(choices=["latest", "all"])
+
+    def validate_simulation_id(self, value):
+        if isinstance(value, int):
+            return [value]
+
+        if isinstance(value, list) and all(isinstance(v, int) for v in value):
+            return value
+
+        raise serializers.ValidationError(
+            "simulation_id must be an integer or a list of integers."
+        )
+
+class SimulationRunStatusGetResponseSerializer(serializers.ModelSerializer):
+    simulation_id = serializers.IntegerField(source="simulation.id")
+    run_time = serializers.DateTimeField(source="runTime")
+
+    class Meta:
+        model = RunsRecord
+        fields = ["simulation_id", "run_time", "status"]
 
 
 class SimulationFullSerializer(serializers.ModelSerializer):

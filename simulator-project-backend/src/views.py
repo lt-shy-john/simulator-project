@@ -180,7 +180,9 @@ def view_simulation_runs_status(request):
             log.info(f'Started view_simulation_runs_status for simulation IDs {request.data.get("simulation_id")}.')
         elif len(request.data.get("simulation_id")) == 0:
             log.info(f'Started view_simulation_runs_status.')
-            raise Response('Simulation ID is empty', status=status.HTTP_400_BAD_REQUEST)
+            return Response('Simulation ID is empty', status=status.HTTP_400_BAD_REQUEST)
+    elif type(request.data.get("simulation_id")) != int:
+        return Response('Simulation ID must be integer', status=status.HTTP_400_BAD_REQUEST)
     request.data['response_type'] = request.data.get('response_type').lower()
     req = SimulationRunStatusGetRequestSerializer(data=request.data)
     req.is_valid(raise_exception=True)

@@ -154,7 +154,7 @@ def set_view_simulation(request):
         page = paginator.paginate_queryset(simulations, request)
         log.info(f'Received {simulations.count()} simulations in set_view_simulation().')
         serializer = SimulationGetterSerializer(page, many=True, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({"count": paginator.page.paginator.count, "results": serializer.data}, status=status.HTTP_200_OK)
     elif request.method == 'POST':
         log.info(f'Received POST request for set_view_simulation.')
         serializer = SimulationSetterSerializer(data=request.data, context={'request': request})

@@ -215,6 +215,7 @@ def view_simulation_runs_status(request):
             )
             if latest:
                 records.append(latest)
+                log.info(f'Latest simulation for simulation ID {sim_id} found. Appending to the result set... ')
             else:
                 log.info(f"No runs for simulation ID {sim_id} found.")
 

@@ -1,4 +1,4 @@
-import { RootProvider } from 'fumadocs-ui/provider';
+import { RootProvider } from 'fumadocs-ui/provider/next';
 import type * as PageTree from 'fumadocs-core/page-tree';
 import 'fumadocs-ui/style.css';
 import { Inter } from 'next/font/google';

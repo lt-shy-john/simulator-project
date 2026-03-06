@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import '../../ui/global.css'
@@ -26,16 +26,59 @@ interface GridDataSource {
 
 const customDataSource: GridDataSource = {
     getRows: async (params: GridGetRowsParams): Promise<GridGetRowsResponse> => {
-        const response = await fetch('http://localhost:8000/simulations/');
-        const data = await response.json();
-        console.log(data.length + ' simulation data fetched. ');
+        const page = params.paginationModel?.page ?? 0;
+        const pageSize = params.paginationModel?.pageSize ?? 10;
+
+        // Backend expects 1-based page index
+        const backendPage = page + 1;
+
+        const simRes = await fetch(
+            `http://localhost:8000/simulations?page=${backendPage}&pagesize=${pageSize}`
+        );
+
+        const simData = await simRes.json();
+
+        const simulations = simData.results ?? [];
+        const totalCount = simData.count ?? 0;
+
+        console.log(
+            `${simulations.length} simulation data fetched. (page ${backendPage})`
+        );
+
+        // Fetch latest run status
+        if (simulations.length > 0) {
+            const ids = simulations.map((s: any) => s.id);
+
+            const statusRes = await fetch(
+                'http://localhost:8000/simulations/simulation-run/status',
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        simulation_id: ids,
+                        response_type: 'latest',
+                    }),
+                }
+            );
+
+            const statusData = await statusRes.json();
+
+            const statusMap = new Map<number, string>();
+            statusData.forEach((s: any) => {
+                statusMap.set(s.simulation_id, s.status);
+            });
+
+            simulations.forEach((sim: any) => {
+                sim.status = statusMap.get(sim.id) ?? 'Never Run';
+            });
+        }
 
         return {
-            rows: data,
-            //rowCount: data.length,
+            rows: simulations,
+            rowCount: totalCount,
         };
     },
-}
+};
 
 export interface DeleteConfirmProps {
     open: boolean;
@@ -95,62 +138,44 @@ function DeleteConfirmDialog(props: DeleteConfirmProps) {
 export default function Page() {
     const [displayDatagrid, setDisplayDatagrid] = useState(false);
     const [openDeleteDialogue, setOpenDeleteDialogue] = useState(false);
-    const [deleteId, setdeleteId] = useState(null);
-
-    const router = useRouter();
-
-    useEffect(() => { setTimeout(() => { setDisplayDatagrid(true); });}, []);
-
-
+    const [deleteId, setdeleteId] = useState(null); const router = useRouter(); useEffect(() => { setTimeout(() => { setDisplayDatagrid(true); }); }, []);
     function handleRunSimulation(data) {
         console.log('Running simulation ' + data.id + '.');
         sessionStorage.setItem('simuData', JSON.stringify(data));
         router.push('/simulation/run/' + data.id);
     }
+
     function handleViewSimulation(data) {
-        console.log('Viewing simulation ' + data.id + '.');
-        router.push('/view-simulation/' + data.id);
+        console.log('Viewing simulation ' + data.id + '.'); router.push('/view-simulation/' + data.id);
     }
+
     function handleViewSimulationSetting(data) {
-        console.log('Redirecting to setting page simulation ' + data.id + '.');
-        router.push('/update-simulation/basic/' + data.id);
+        console.log('Redirecting to setting page simulation ' + data.id + '.'); router.push('/update-simulation/basic/' + data.id);
     }
 
-    const handleDeleteSimulation = (data) =>  {
-        console.log('Deleting simulation ' + data.id + '.');
-        setOpenDeleteDialogue(true);
-        setdeleteId(data.id);
+    const handleDeleteSimulation = (data) => {
+        console.log('Deleting simulation ' + data.id + '.'); setOpenDeleteDialogue(true); setdeleteId(data.id);
     }
 
-    const handleDeleteClose = (value: string) => {
-        setOpenDeleteDialogue(false);
-    };
-
+    const handleDeleteClose = (value: string) => { setOpenDeleteDialogue(false); };
     const columns = [
         { field: "name", headerName: "Name", hideable: true, width: 150 },
         { field: "numberOfAgent", headerName: "Number of Agents (N)", hideable: true, width: 150 },
         { field: "simulationPeriod", headerName: "Simulation Time (T)", hideable: true, width: 150 },
         { field: "createDate", headerName: "Creation Date", type: 'date', valueGetter: (value) => new Date(value), hideable: true, width: 150 },
-        //{
-        //    field: "status", headerName: "Status", hideable: false, width: 150,
-        //    renderCell: (params) => {
-        //        return <Chip label={params.value} icon={<AlarmIcon />} label="Unknown" color={grey[100]} />;
-        //    },
-        //},
+        //{ field: "status", headerName: "Status", hideable: false, width: 150,
+        // renderCell: (params) => {
+        // return <Chip label={params.value} icon={<AlarmIcon />} label="Unknown" color={grey[100]} />;
+        // },
+        //}, 
         {
-            field: "status", headerName: "Status", hideable: false, width: 150,
-            renderCell: (params) => {
+            field: "status", headerName: "Status", hideable: false, width: 150, renderCell: (params) => {
                 return <SimuStatus status={params.status} />;
             },
         },
         {
             field: "action", headerName: "Action", type: 'actions', width: 100,
-            getActions: (params: GridRowParams) => [
-                <GridActionsCellItem onClick={() => { handleRunSimulation(params.row); }} label="Run" showInMenu />,
-                <GridActionsCellItem onClick={() => { handleViewSimulation(params.row); }} label="View" showInMenu />,
-                <GridActionsCellItem onClick={() => { handleViewSimulationSetting(params.row); }} label="Settings" showInMenu />,
-                <GridActionsCellItem onClick={() => { handleDeleteSimulation(params.row); }} label="Delete" showInMenu />,
-            ]
+            getActions: (params: GridRowParams) => [<GridActionsCellItem onClick={() => { handleRunSimulation(params.row); }} label="Run" showInMenu />, <GridActionsCellItem onClick={() => { handleViewSimulation(params.row); }} label="View" showInMenu />, <GridActionsCellItem onClick={() => { handleViewSimulationSetting(params.row); }} label="Settings" showInMenu />, <GridActionsCellItem onClick={() => { handleDeleteSimulation(params.row); }} label="Delete" showInMenu />,]
         },
     ];
 
@@ -164,29 +189,26 @@ export default function Page() {
             <div className="crud-header"><Typography variant="h3">Simulation</Typography></div>
             <div className="crud-header"><Button variant="contained" href='/create-simulation'>Create</Button></div>
             <div style={{ display: 'flex', flexDirection: 'column', height: 400, width: '100%' }}>
-                {displayDatagrid && <DataGrid columns={columns} dataSource={customDataSource} pagination onPaginationModelChange={setPaginationModel}
-                    initialState={{ columns: { columnVisibilityModel: { numberOfAgent: false, simulationPeriod: false } }, pagination: { paginationModel: paginationModel, rowCount: 0 } }}
+                {displayDatagrid && <DataGrid columns={columns} dataSource={customDataSource} pagination onPaginationModelChange={setPaginationModel} initialState={{
+                    pagination: { paginationModel },
+                }}
                     onDataSourceError={(error) => {
-                        if (error instanceof GridGetRowsError) {
+                        if (error instanceof GridGetRowsError) { 
                             // `error.params` is of type `GridGetRowsParams`
-                            // fetch related logic, e.g set an overlay state
+                            // fetch related logic, e.g set an overlay state 
                             console.group('== GridGetRowsError ==');
                             console.error('There is an error when getting simulation data.');
                             console.error(error);
                             console.groupEnd();
-                        }
-                        if (error instanceof GridUpdateRowError) {
+                        } if (error instanceof GridUpdateRowError) { 
                             // `error.params` is of type `GridUpdateRowParams`
-                            // update related logic, e.g set a snackbar state
-                            console.group('== GridUpdateRowError ==');
+                            // update related logic, e.g set a snackbar state 
+                            console.group('== GridUpdateRowError =='); 
                             console.error('There is an error when updating simulation data.');
                             console.error(error);
                             console.groupEnd();
                         }
                     }}
-                    pageSizeOptions={[paginationModel['pageSize'], paginationModel['pageSize'] * 2, paginationModel['pageSize'] * 3]} /> }
-                <DeleteConfirmDialog selectedRecord={deleteId} open={openDeleteDialogue} onClose={handleDeleteClose}/>
-            </div>
-        </div>
-    )
+                    pageSizeOptions={[paginationModel['pageSize'], paginationModel['pageSize'] * 2, paginationModel['pageSize'] * 3]} />}
+                <DeleteConfirmDialog selectedRecord={deleteId} open={openDeleteDialogue} onClose={handleDeleteClose} /> </div> </div>)
 }

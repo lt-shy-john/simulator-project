@@ -67,7 +67,7 @@ export default function Page() {
                   <label>Simulation time (T)</label>
                   <p>{formData['simulationPeriod']}</p>
                 <Button>Cancel</Button>
-                <Button type="submit" variant="contained">Next</Button>
+                <Button type="submit" variant="contained">Create</Button>
               </fieldset>
           </form>
     </div>

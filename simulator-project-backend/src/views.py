@@ -154,7 +154,7 @@ def set_view_simulation(request):
         page = paginator.paginate_queryset(simulations, request)
         log.info(f'Received {simulations.count()} simulations in set_view_simulation().')
         serializer = SimulationGetterSerializer(page, many=True, context={'request': request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({"count": paginator.page.paginator.count, "results": serializer.data}, status=status.HTTP_200_OK)
     elif request.method == 'POST':
         log.info(f'Received POST request for set_view_simulation.')
         serializer = SimulationSetterSerializer(data=request.data, context={'request': request})
@@ -215,6 +215,7 @@ def view_simulation_runs_status(request):
             )
             if latest:
                 records.append(latest)
+                log.info(f'Latest simulation for simulation ID {sim_id} found. Appending to the result set... ')
             else:
                 log.info(f"No runs for simulation ID {sim_id} found.")
 

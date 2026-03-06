@@ -153,6 +153,7 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
     const handleUpdateClose = (value: string) => { setOpenUpdateDialogue(false); };
 
     const handleUpdate = (id: string) => {
+        if (!id) return;
         console.log('Updating simulation ' + id + '.');
         const existing = localStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};

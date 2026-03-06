@@ -19,4 +19,6 @@ You need to install the following libraries
 * `djangorestframework`
 * `djangochannelsrestframework`
 
+Add the requirements from `requirements.txt` at the root folder. It is recommended to create a virtual environment (i.e. a new `.venv` folder) at the root folder. 
+
 ## Contributing

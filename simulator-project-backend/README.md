@@ -22,6 +22,8 @@ You need to install the following libraries
 * `djangorestframework`
 * `drf-spectacular`
 
+Add the requirements from `requirements.txt` at the root folder. It is recommended to create a virtual environment (i.e. a new `.venv` folder) at the root folder. 
+
 ## Testing
 At the root of the Simulation Project Backend folder, run `py manage.py test`. 
 

@@ -5,6 +5,9 @@
       "dom.iterable",
       "esnext"
     ],
+    "paths": {
+      "fumadocs-mdx:collections/*": [ ".source/*" ]
+    },
     "allowJs": true,
     "skipLibCheck": true,
     "strict": false,

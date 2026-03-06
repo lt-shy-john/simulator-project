@@ -2,6 +2,7 @@
 title: Using Simulation
 ---
 
+import Image from 'next/image'
 import Link from 'fumadocs-core/link';
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 
@@ -24,7 +25,13 @@ The lifecycle of the simulations in Agent Based Simulations are
 The instructions on creating simulations are in <Link href="/docs/simulation/simulation-manage#create-simulation">Create Simulation</Link>. 
 
 ## Run Simulation
-![A webpage with a big table in the middle.](/docs/SimulationRun.PNG)
+
+<Image
+  src="/docs/SimulationRun.PNG"
+  width={800}
+  height={600}
+  alt="A black console screen in the middle."
+/>
 To run a simulation, you will need to. 
 1. Find the simulation you are looking for at `/simulation`
 2. Click the three ellipses. Then click "Run"

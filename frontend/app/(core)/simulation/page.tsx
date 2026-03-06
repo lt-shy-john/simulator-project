@@ -138,7 +138,9 @@ function DeleteConfirmDialog(props: DeleteConfirmProps) {
 export default function Page() {
     const [displayDatagrid, setDisplayDatagrid] = useState(false);
     const [openDeleteDialogue, setOpenDeleteDialogue] = useState(false);
-    const [deleteId, setdeleteId] = useState(null); const router = useRouter(); useEffect(() => { setTimeout(() => { setDisplayDatagrid(true); }); }, []);
+    const [deleteId, setdeleteId] = useState(null);
+    const router = useRouter();
+    useEffect(() => { setTimeout(() => { setDisplayDatagrid(true); }); }, []);
     function handleRunSimulation(data) {
         console.log('Running simulation ' + data.id + '.');
         sessionStorage.setItem('simuData', JSON.stringify(data));
@@ -210,5 +212,7 @@ export default function Page() {
                         }
                     }}
                     pageSizeOptions={[paginationModel['pageSize'], paginationModel['pageSize'] * 2, paginationModel['pageSize'] * 3]} />}
-                <DeleteConfirmDialog selectedRecord={deleteId} open={openDeleteDialogue} onClose={handleDeleteClose} /> </div> </div>)
+                <DeleteConfirmDialog selectedRecord={deleteId} open={openDeleteDialogue} onClose={handleDeleteClose} />
+            </div>
+        </div>)
 }

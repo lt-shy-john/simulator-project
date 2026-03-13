@@ -36,9 +36,9 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
     }, []);
 
     const onSubmit = (data: Inputs) => {
-        const existing = localStorage.getItem('data');
+        const existing = sessionStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
-        localStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
+        sessionStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
         router.push('/update-simulation-confirm/'+simuData.id);
     };
 

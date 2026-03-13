@@ -20,7 +20,7 @@ export default function Page() {
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const savedData = localStorage.getItem('data');
+            const savedData = sessionStorage.getItem('data');
             console.log('Obtained previous form data. ');
             if (savedData) {
                 const data = JSON.parse(savedData);
@@ -31,10 +31,10 @@ export default function Page() {
     }, [setValue]);
 
     const onSubmit = (data: Inputs) => {
-        const existing = localStorage.getItem('data');
+        const existing = sessionStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
-        localStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
-        console.log(localStorage);
+        sessionStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
+        console.log(sessionStorage);
         router.push('/create-simulation-confirm');
     };
 

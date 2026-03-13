@@ -39,7 +39,7 @@ export default function Page() {
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const stored = localStorage.getItem('data');
+            const stored = sessionStorage.getItem('data');
             if (stored) {
                 setFormData(JSON.parse(stored));
             }
@@ -47,12 +47,12 @@ export default function Page() {
     }, []);
 
     const onSubmit = (data: CreateSimulationData) => {
-        const existing = localStorage.getItem('data');
+        const existing = sessionStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
-        localStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
-        console.log(localStorage);
+        sessionStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
+        console.log(sessionStorage);
         setSimuData({ ...formData, createdBy: { username: "johnyeung" } }); 
-        localStorage.removeItem('data');
+        sessionStorage.removeItem('data');
         console.log("Data submitted.");
         router.push('/simulation');
     };

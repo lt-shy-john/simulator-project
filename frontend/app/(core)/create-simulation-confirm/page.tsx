@@ -7,6 +7,7 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 
 type CreateSimulationData = {
+    name: string, 
     numberOfAgent: number,
     simulationPeriod: number,
     createdBy: {
@@ -62,6 +63,8 @@ export default function Page() {
           <form onSubmit={handleSubmit(onSubmit)}>
               <fieldset>
                   <legend><Typography variant="h4">Confirmation</Typography></legend>
+                  <label>Simulation name</label>
+                  <p>{formData['name']}</p>
                   <label>Number of agents (N)</label>
                   <p>{formData['numberOfAgent']}</p>
                   <label>Simulation time (T)</label>

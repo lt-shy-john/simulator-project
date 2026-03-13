@@ -14,6 +14,7 @@ import MenuList from '@mui/material/MenuList';
 import Typography from '@mui/material/Typography';
 
 type UpdateSimulationData = {
+    name: string,
     numberOfAgent: number,
     simulationPeriod: number,
     createdBy: {
@@ -170,6 +171,8 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
           <form onSubmit={handleSubmit(onSubmit)}>
               <fieldset>
                   <legend><Typography variant="h4">Confirmation</Typography></legend>
+                  <label>Simulation name</label>
+                  <p>{formData['name']}</p>
                   <label>Number of agents (N)</label>
                   <p>{formData['numberOfAgent']}</p>
                   <label>Simulation time (T)</label>

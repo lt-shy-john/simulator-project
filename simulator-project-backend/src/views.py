@@ -276,15 +276,16 @@ def set_mode(request):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['GET'])
 @extend_schema(
-        summary="Get mode document",
+        summary="Get file document",
         responses={
             200: OpenApiResponse(response=FileGetterSerializer,
                                  description='Success'),
             404: OpenApiResponse(description='File not found')
-        }
+        },
+        deprecated=True
     )
+@api_view(['GET'])
 def get_file_by_id(request, id):
     log.info(f'Started get_file_by_id with file ID {id}.')
     file = get_object_or_404(File, pk=id)
@@ -302,7 +303,8 @@ def get_file_by_id(request, id):
                                  description='Created'),
             400: OpenApiResponse(description='Invalid parameter'),
             404: OpenApiResponse(description='Simulation not found')
-        }
+        },
+        deprecated=True
     )
 @api_view(['POST'])
 def set_file(request):

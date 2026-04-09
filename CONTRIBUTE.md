@@ -115,8 +115,6 @@ sequenceDiagram
     frontend->>simulator-project-simulation: disconnect
     simulator-project-simulation-->>frontend: connectionClosed
     frontend->>simulator-project-backend: Update new run record, status: DONE
-    simulator-project-backend->>db.sqlite3: Update new run record, status: DONE
-    db.sqlite3-->>simulator-project-backend: OK
     simulator-project-backend-->>frontend: Status 200
 ```
 

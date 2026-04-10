@@ -7,7 +7,7 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 
 type Inputs = {
-    name: string, 
+    name: string,
     numberOfAgent: number,
     simulationPeriod: number,
 };
@@ -35,6 +35,12 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
         
     }, []);
 
+    const handleCancelUpdate = () => {
+        console.log("Cancelling simulation update. Removing session item...");
+        sessionStorage.removeItem('data');
+        router.push("/simulation");
+    };
+
     const onSubmit = (data: Inputs) => {
         const existing = sessionStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
@@ -56,7 +62,7 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
                         <input type="text" id="N" name="N" {...register("numberOfAgent")} required aria-required="true" /><br />
                         <label htmlFor="T"><Typography variant="body1">Simulation time (T)</Typography></label>
                         <input type="text" id="T" name="T" {...register("simulationPeriod")} required aria-required="true" /><br /><br />
-                        <Button>Cancel</Button>
+                        <Button onClick={handleCancelUpdate}>Cancel</Button>
                         <Button type="submit" variant="contained">Next</Button>
                     </fieldset>)
                 }

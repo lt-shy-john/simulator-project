@@ -115,12 +115,16 @@ sequenceDiagram
     frontend->>simulator-project-simulation: disconnect
     simulator-project-simulation-->>frontend: connectionClosed
     frontend->>simulator-project-backend: Update new run record, status: DONE
-    simulator-project-backend->>db.sqlite3: Update new run record, status: DONE
-    db.sqlite3-->>simulator-project-backend: OK
     simulator-project-backend-->>frontend: Status 200
 ```
 
 If the simulation run status is blank or anything else, the status should be `"Undertermined"`. 
+
+### Data
+After the simulation, the data will be stored under `/simulator-project-core/data/{name}`[^1]. All data is stored under folder of it's simulation name. If not set then it should be the simulation (start) date in `%Y%m%d` (e.g. "20261003"). 
+
+[^1]:Data are not stored under `/simulator-project-simulator` because it is called from `/simulator-project-core`. 
+
 
 ## Structure of Front End 
 This application uses [App Router](https://nextjs.org/docs/app/getting-started/project-structure) from Next.JS. This defines the folder structure you see in here. 

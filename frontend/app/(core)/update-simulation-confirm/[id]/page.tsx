@@ -61,9 +61,7 @@ function UpdateConfirmDialog(props: UpdateConfirmProps & { onConfirm: () => void
                 <Typography variant="body1">Please confirm you are updating this simulation set. </Typography>
             </DialogContent>
             <DialogActions>
-                <Button autoFocus onClick={handleCancelUpdate}>
-                    Cancel
-                </Button>
+                <Button autoFocus onClick={handleCancelUpdate}>Cancel</Button>
                 <Button onClick={props.onConfirm}>Confirm</Button>
             </DialogActions>
         </Dialog>
@@ -136,6 +134,12 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
         }
     }, []);
 
+    const handleCancelUpdate = () => {
+        console.log("Cancelling simulation update. Removing session item...");
+        sessionStorage.removeItem('data');
+        router.push("/simulation");
+    };
+
     const onSubmit = (data: UpdateSimulationData) => {
         const existing = sessionStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
@@ -177,7 +181,8 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
                   <p>{formData['numberOfAgent']}</p>
                   <label>Simulation time (T)</label>
                   <p>{formData['simulationPeriod']}</p>
-                  <Button>Cancel</Button>
+                  <Button onClick={handleCancelUpdate}>Cancel</Button>
+                  <Button onClick={() => router.back()}>Back</Button>
                   <ButtonGroup
                       variant="contained"
                       ref={anchorRef}

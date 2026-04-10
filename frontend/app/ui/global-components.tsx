@@ -4,7 +4,7 @@ import Link from 'next/link'
 export function Footer() {
     return (
         <footer>
-            <p>© John Yeung 2024 - 2025</p>
+            <p>© John Yeung 2024 - 2026</p>
         </footer>
     )
 }

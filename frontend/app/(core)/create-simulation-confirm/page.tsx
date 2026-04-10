@@ -7,6 +7,7 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 
 type CreateSimulationData = {
+    name: string, 
     numberOfAgent: number,
     simulationPeriod: number,
     createdBy: {
@@ -38,7 +39,7 @@ export default function Page() {
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const stored = localStorage.getItem('data');
+            const stored = sessionStorage.getItem('data');
             if (stored) {
                 setFormData(JSON.parse(stored));
             }
@@ -46,12 +47,12 @@ export default function Page() {
     }, []);
 
     const onSubmit = (data: CreateSimulationData) => {
-        const existing = localStorage.getItem('data');
+        const existing = sessionStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
-        localStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
-        console.log(localStorage);
+        sessionStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
+        console.log(sessionStorage);
         setSimuData({ ...formData, createdBy: { username: "johnyeung" } }); 
-        localStorage.removeItem('data');
+        sessionStorage.removeItem('data');
         console.log("Data submitted.");
         router.push('/simulation');
     };
@@ -62,6 +63,8 @@ export default function Page() {
           <form onSubmit={handleSubmit(onSubmit)}>
               <fieldset>
                   <legend><Typography variant="h4">Confirmation</Typography></legend>
+                  <label>Simulation name</label>
+                  <p>{formData['name']}</p>
                   <label>Number of agents (N)</label>
                   <p>{formData['numberOfAgent']}</p>
                   <label>Simulation time (T)</label>

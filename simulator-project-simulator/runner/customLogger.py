@@ -24,8 +24,8 @@ def gen_logging(filename, verbose_flag = 'info'):
     root = logging.getLogger(__name__)
 
     if filename != "":
-        os.makedirs(f"./logs/{filename}", exist_ok=True)
-        log_f = logging.FileHandler(f"./logs/{filename}/{filename}.log")
+        os.makedirs(f"./data/{filename}", exist_ok=True)
+        log_f = logging.FileHandler(f"./data/{filename}/{filename}.log")
     ch = logging.StreamHandler(sys.stdout)
 
     if verbose_flag not in ['debug', 'info', 'warning', 'error', 'critical']:

@@ -14,7 +14,7 @@ class Simulation():
 
     def __call__(self):
         start_time = datetime.datetime.now()
-        filename = self.params['name'] + start_time.strftime("%Y%m%d") if self.params['name'] != "" else ""
+        filename = self.params['name'] if self.params['name'] != "" else ""
 
         '''
         Simulation starts here

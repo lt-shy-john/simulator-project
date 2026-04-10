@@ -33,10 +33,16 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
         
     }, []);
 
+    const handleCancelUpdate = () => {
+        console.log("Cancelling simulation update. Removing session item...");
+        sessionStorage.removeItem('data');
+        router.push("/simulation");
+    };
+
     const onSubmit = (data: Inputs) => {
-        const existing = localStorage.getItem('data');
+        const existing = sessionStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
-        localStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
+        sessionStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
         router.push('/update-simulation-confirm/'+simuData.id);
     };
 
@@ -52,7 +58,7 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
                         <input type="text" id="N" name="N" {...register("numberOfAgent")} /><br />
                         <label htmlFor="T"><Typography variant="body1">Simulation time (T)</Typography></label>
                         <input type="text" id="T" name="T" {...register("simulationPeriod")} /><br /><br />
-                        <Button>Cancel</Button>
+                        <Button onClick={handleCancelUpdate}>Cancel</Button>
                         <Button type="submit" variant="contained">Next</Button>
                     </fieldset>)
                 }

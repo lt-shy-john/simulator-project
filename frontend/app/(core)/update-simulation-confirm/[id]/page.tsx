@@ -60,9 +60,7 @@ function UpdateConfirmDialog(props: UpdateConfirmProps & { onConfirm: () => void
                 <Typography variant="body1">Please confirm you are updating this simulation set. </Typography>
             </DialogContent>
             <DialogActions>
-                <Button autoFocus onClick={handleCancelUpdate}>
-                    Cancel
-                </Button>
+                <Button autoFocus onClick={handleCancelUpdate}>Cancel</Button>
                 <Button onClick={props.onConfirm}>Confirm</Button>
             </DialogActions>
         </Dialog>
@@ -128,20 +126,26 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const stored = localStorage.getItem('data');
+            const stored = sessionStorage.getItem('data');
             if (stored) {
                 setFormData(JSON.parse(stored));
             }
         }
     }, []);
 
+    const handleCancelUpdate = () => {
+        console.log("Cancelling simulation update. Removing session item...");
+        sessionStorage.removeItem('data');
+        router.push("/simulation");
+    };
+
     const onSubmit = (data: UpdateSimulationData) => {
-        const existing = localStorage.getItem('data');
+        const existing = sessionStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
-        localStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
-        console.log(localStorage);
+        sessionStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
+        console.log(sessionStorage);
         postSimuData(id, { ...formData, createdBy: { username: "johnyeung" } }); 
-        localStorage.removeItem('data');
+        sessionStorage.removeItem('data');
         console.log("Data submitted.");
         router.push('/simulation');
     };
@@ -155,11 +159,11 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
     const handleUpdate = (id: string) => {
         if (!id) return;
         console.log('Updating simulation ' + id + '.');
-        const existing = localStorage.getItem('data');
+        const existing = sessionStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
         console.log(existing);
         updateSimuData(id, { ...formData, createdBy: { username: "johnyeung" } });
-        localStorage.removeItem('data');
+        sessionStorage.removeItem('data');
         console.log("Data submitted.");
         router.push('/simulation');
     };
@@ -174,7 +178,8 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
                   <p>{formData['numberOfAgent']}</p>
                   <label>Simulation time (T)</label>
                   <p>{formData['simulationPeriod']}</p>
-                  <Button>Cancel</Button>
+                  <Button onClick={handleCancelUpdate}>Cancel</Button>
+                  <Button onClick={() => router.back()}>Back</Button>
                   <ButtonGroup
                       variant="contained"
                       ref={anchorRef}

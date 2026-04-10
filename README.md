@@ -54,10 +54,6 @@ This is a plain Python module with the simulation code.
 * Authenication
 * Logo for this whole project
 * Simulation structure/ language
-* Documentations
-	* How to start simulation
-	* How to create simulation
-	* Other guides
 * Docker
 * 418 page (April fools)
 * Games corner (and other fun Easter eggs stuff)

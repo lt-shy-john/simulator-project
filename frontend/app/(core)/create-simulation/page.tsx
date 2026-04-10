@@ -7,6 +7,7 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 
 type Inputs = {
+    name: string, 
     numberOfAgent: number,
     simulationPeriod: number,
 };
@@ -42,10 +43,12 @@ export default function Page() {
             <Typography variant="h3">Create Simulation</Typography>
             <form onSubmit={handleSubmit(onSubmit)}>
                 <fieldset>
+                    <label htmlFor="Name"><Typography variant="body1">Simulation name</Typography></label>
+                    <input type="text" id="Name" name="Name"  {...register("name")} required aria-required="true" /><br />
                     <label htmlFor="N"><Typography variant="body1">Number of agents (N)</Typography></label>
-                    <input type="text" id="N" name="N"  {...register("numberOfAgent")} /><br />
+                    <input type="text" id="N" name="N"  {...register("numberOfAgent")} required aria-required="true" /><br />
                     <label htmlFor="T"><Typography variant="body1">Simulation time (T)</Typography></label>
-                    <input type="text" id="T" name="T"  {...register("simulationPeriod")} /><br /><br />
+                    <input type="text" id="T" name="T"  {...register("simulationPeriod")} required aria-required="true" /><br /><br />
                     <Button>Cancel</Button>
                     <Button type="submit" variant="contained">Next</Button>
                 </fieldset>

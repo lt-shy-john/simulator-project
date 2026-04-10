@@ -7,6 +7,7 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 
 type Inputs = {
+    name: string,
     numberOfAgent: number,
     simulationPeriod: number,
 };
@@ -24,6 +25,7 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
     useEffect(() => {
         fetch("http://localhost:8000/simulations/" + id).then(response => response.json()).then((json) => {
             setSimuData(json);
+            setValue("name", json.name);
             setValue("numberOfAgent", json.numberOfAgent);
             setValue("simulationPeriod", json.simulationPeriod);
             setLoading(false); }
@@ -54,10 +56,12 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
                     <fieldset>
                         <label htmlFor="ID"><Typography variant="body1">Simulation ID</Typography></label>
                         <Typography variant="body1">{simuData.id}</Typography>
+                        <label htmlFor="Name"><Typography variant="body1">Simulation name</Typography></label>
+                        <input type="text" id="Name" name="Name" {...register("name")} required aria-required="true" /><br />
                         <label htmlFor="N"><Typography variant="body1">Number of agents (N)</Typography></label>
-                        <input type="text" id="N" name="N" {...register("numberOfAgent")} /><br />
+                        <input type="text" id="N" name="N" {...register("numberOfAgent")} required aria-required="true" /><br />
                         <label htmlFor="T"><Typography variant="body1">Simulation time (T)</Typography></label>
-                        <input type="text" id="T" name="T" {...register("simulationPeriod")} /><br /><br />
+                        <input type="text" id="T" name="T" {...register("simulationPeriod")} required aria-required="true" /><br /><br />
                         <Button onClick={handleCancelUpdate}>Cancel</Button>
                         <Button type="submit" variant="contained">Next</Button>
                     </fieldset>)

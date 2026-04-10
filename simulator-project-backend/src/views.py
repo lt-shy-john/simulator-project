@@ -6,7 +6,6 @@ from django.shortcuts import get_object_or_404
 from django.http import HttpResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
-from django.db.models import Max, Q
 
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 

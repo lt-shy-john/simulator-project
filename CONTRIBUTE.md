@@ -157,10 +157,17 @@ You can add a page under `/frontend/content/docs/` or its subfolders. The pages 
 ### Add Images
 The images are located from `/public`. Hence when refering them use this as the root folder. For example, documentations are has a path of `/docs/<img-file>`.
 
+The `.mdx` file now only accepts Next JS `<image>` tag for inserting images. For example, 
+```md
+import Image from 'next/image'
 
-
-
-
+<Image
+  src="/docs/SimulationRun.PNG"
+  width={800}
+  height={600}
+  alt="A black console screen in the middle."
+/>
+```
 
 
 

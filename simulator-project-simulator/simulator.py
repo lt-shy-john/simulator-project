@@ -9,9 +9,13 @@ root_logger = logger.gen_logging(filename, None)
 
 try:
     N = int(sys.argv[1])
+except IndexError:
+    print("No simulation agent number specified.")
+    N = 3
+try:
     T = int(sys.argv[2])
 except IndexError:
-    print("No simulation time specified.")
+    print("No simulation agent time specified.")
     T = 10
 
 if sys.argv[-1] == 'run':

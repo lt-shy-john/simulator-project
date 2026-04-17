@@ -22,13 +22,21 @@ export default function Page() {
         if (typeof window !== 'undefined') {
             const savedData = sessionStorage.getItem('data');
             console.log('Obtained previous form data. ');
+            console.log(savedData);
             if (savedData) {
                 const data = JSON.parse(savedData);
-                if (data.N) setValue('numberOfAgent', data.numberOfAgent);
-                if (data.T) setValue('simulationPeriod', data.simulationPeriod);
+                if (data.name) setValue('name', data.name);
+                if (data.numberOfAgent) setValue('numberOfAgent', data.numberOfAgent);
+                if (data.simulationPeriod) setValue('simulationPeriod', data.simulationPeriod);
             }
         }
     }, [setValue]);
+
+    const handleCancelUpdate = () => {
+        console.log("Cancelling simulation update. Removing session item...");
+        sessionStorage.removeItem('data');
+        router.push("/simulation");
+    };
 
     const onSubmit = (data: Inputs) => {
         const existing = sessionStorage.getItem('data');
@@ -49,7 +57,7 @@ export default function Page() {
                     <input type="text" id="N" name="N"  {...register("numberOfAgent")} required aria-required="true" /><br />
                     <label htmlFor="T"><Typography variant="body1">Simulation time (T)</Typography></label>
                     <input type="text" id="T" name="T"  {...register("simulationPeriod")} required aria-required="true" /><br /><br />
-                    <Button>Cancel</Button>
+                    <Button onClick={handleCancelUpdate}>Cancel</Button>
                     <Button type="submit" variant="contained">Next</Button>
                 </fieldset>
             </form>

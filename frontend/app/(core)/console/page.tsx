@@ -4,7 +4,7 @@ export default function Page() {
   return (
     <>
       <div className='tab-group'>
-        <Typography variant="h5">Services</Typography>
+        <Typography variant="h5" component="div">Services</Typography>
         <hr/>
         <a href="/simulation"><div className="service"><img src="/service_icon/simulation.svg" width='30px'/><Typography variant="body1">Simulation</Typography></div></a>
         <div className="service"><Typography variant="body1">Report</Typography></div>

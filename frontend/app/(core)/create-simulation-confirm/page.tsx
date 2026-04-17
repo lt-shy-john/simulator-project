@@ -46,6 +46,12 @@ export default function Page() {
         }
     }, []);
 
+    const handleCancelUpdate = () => {
+        console.log("Cancelling simulation update. Removing session item...");
+        sessionStorage.removeItem('data');
+        router.push("/simulation");
+    };
+
     const onSubmit = (data: CreateSimulationData) => {
         const existing = sessionStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
@@ -69,8 +75,9 @@ export default function Page() {
                   <p>{formData['numberOfAgent']}</p>
                   <label>Simulation time (T)</label>
                   <p>{formData['simulationPeriod']}</p>
-                <Button>Cancel</Button>
-                <Button type="submit" variant="contained">Create</Button>
+                  <Button onClick={handleCancelUpdate}>Cancel</Button>
+                  <Button onClick={() => router.back()}>Back</Button>
+                  <Button type="submit" variant="contained">Create</Button>
               </fieldset>
           </form>
     </div>

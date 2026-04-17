@@ -30,9 +30,6 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
             setValue("simulationPeriod", json.simulationPeriod);
             setLoading(false); }
         );
-        
-        
-        
     }, []);
 
     const handleCancelUpdate = () => {

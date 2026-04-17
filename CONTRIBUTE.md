@@ -73,7 +73,7 @@ sequenceDiagram
 			simulator-project-backend->>db.sqlite3: Check if simulation (by ID) is running
 			db.sqlite3-->>simulator-project-backend: OK
 			alt Something is running
-				simulator-project-backend-->>frontend: Status 409
+				simulator-project-backend-->>frontend: Status 200
 				frontend->>log file: Get most recent file
 				log file-->>frontend: Data
 			else New simulation run

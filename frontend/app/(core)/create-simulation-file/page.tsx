@@ -1,18 +1,22 @@
 "use client";
 
 import { useEffect } from 'react';
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { useRouter } from 'next/navigation';
-import { Button, Typography, TextField } from '@mui/material';
+import { Button, FormControl, Typography, Select, MenuItem, } from '@mui/material';
 
 type Inputs = {
     name: string, 
     numberOfAgent: number,
     simulationPeriod: number,
+    logLevel: number,
 };
 
 export default function Page() {
-    const { register, handleSubmit, watch, setValue, formState: { errors }, } = useForm<Inputs>();
+    const { register, control, handleSubmit, watch, setValue } = useForm<Inputs>({defaultValues: {
+      logLevel: 'info',
+    },}
+    );
     const router = useRouter();
 
     console.log(watch());
@@ -42,21 +46,37 @@ export default function Page() {
         const formData = existing ? JSON.parse(existing) : {};
         sessionStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
         console.log(sessionStorage);
-        router.push('/create-simulation-file');
+        router.push('/create-simulation-confirm');
     };
 
     return (
         <div id='title'>
             <Typography variant="h3">Create Simulation</Typography>
+            <Typography variant="h4">File</Typography>
+            <Typography variant="body2">Create files exported from simulation</Typography>
             <form onSubmit={handleSubmit(onSubmit)}>
                 <fieldset>
-                    <label htmlFor="Name"><Typography variant="body1">Simulation name</Typography></label>
-                    <TextField id="name" label="Name" variant="outlined" error={!!errors.name} helperText={errors.name?.message} {...register("name", { required: "Name is required" })} required aria-required="true"/>
-                    <label htmlFor="N"><Typography variant="body1">Number of agents (N)</Typography></label>
-                    <TextField id="N" name="N" label="Number of agents" variant="outlined" error={!!errors.name} helperText={errors.name?.message} {...register("numberOfAgent", { required: "Number of agents are required" })} required aria-required="true"/>
-                    <label htmlFor="T"><Typography variant="body1">Simulation time (T)</Typography></label>
-                    <TextField id="T" name="T" label="Simulation time" variant="outlined" error={!!errors.name} helperText={errors.name?.message} {...register("simulationPeriod", { required: "Simulation time is required" })} required aria-required="true"/><br/><br/>
+                    <FormControl fullWidth margin="normal">
+                        <label htmlFor="Name"><Typography variant="body1">Log level</Typography></label>
+                        <Controller
+                          name="logLevel"
+                          control={control}
+                          render={({ field }) => (
+                            <Select
+                              {...field}
+                              labelId="log-level-label"
+                              label="Log Level"
+                            >
+                              <MenuItem value="debug">DEBUG</MenuItem>
+                              <MenuItem value="info">INFO</MenuItem>
+                              <MenuItem value="debug">WARNING</MenuItem>
+                              <MenuItem value="error">ERROR</MenuItem>
+                            </Select>
+                          )}
+                        />
+                    </FormControl>
                     <Button onClick={handleCancelUpdate}>Cancel</Button>
+                    <Button onClick={() => router.back()}>Back</Button>
                     <Button type="submit" variant="contained">Next</Button>
                 </fieldset>
             </form>

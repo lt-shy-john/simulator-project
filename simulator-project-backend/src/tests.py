@@ -380,6 +380,17 @@ class RunRecordsTestCase(TestCase):
         # Assert
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    def testViewSimulationRunBySimulationIDSuccess(self):
+        # Arrange
+        request = {'simulation_id': 1, 'createdBy': {'username': 'admin'}}
+
+        # Act
+        response = self.client.post(reverse('View simulation runs by simulation ID'), request, format='json')
+        response_body = json.loads(response.content)
+
+        # Assert
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
     def testPatchSimulationRunSuccess(self):
         # Arrange
         request = {'status': 'CREATED'}

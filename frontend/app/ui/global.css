@@ -234,16 +234,32 @@ footer {
 	margin: 20px 0;
 	padding: 5px;
 
+	font-family: monospace;
+    white-space: pre;
+
 	width: 100%;
 }
 
 #console-line{
+	display: flex;
+
 	padding-top: 5px;
 	padding-bottom: 5px;
 }
 
 #console-line p {
 	color: #fff;
+}
+
+#console-line-number {
+    width: 50px;
+
+	padding-right: 10px;
+}
+
+#console-line-number p {
+    text-align: right;
+	color: #969696;
 }
 
 /* Command line */

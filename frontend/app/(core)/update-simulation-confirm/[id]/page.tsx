@@ -181,6 +181,11 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
                   <p>{formData['numberOfAgent']}</p>
                   <label>Simulation time (T)</label>
                   <p>{formData['simulationPeriod']}</p>
+                  <legend><Typography variant="h5">File</Typography></legend>
+                  <label>Log level</label>
+                  <p>{formData['logLevel']}</p>
+
+                  {/* Submit Buttons */}
                   <Button onClick={handleCancelUpdate}>Cancel</Button>
                   <Button onClick={() => router.back()}>Back</Button>
                   <ButtonGroup

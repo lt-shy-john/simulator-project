@@ -121,6 +121,12 @@ class ModeGetterSerializer(serializers.ModelSerializer):
         model = Mode
         fields = '__all__'
 
+class SimulationRunGetterSerializer(serializers.HyperlinkedModelSerializer):
+    createdBy = UserSerializer()
+    class Meta:
+        model = RunsRecord
+        fields = ['id', 'runTime', 'simulation_id', 'status', 'createdBy']
+
 class SimulationRunFullSerializer(serializers.ModelSerializer):
     createdBy = UserSerializer(read_only=True)
 

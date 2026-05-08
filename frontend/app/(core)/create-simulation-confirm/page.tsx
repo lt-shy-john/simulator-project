@@ -10,6 +10,7 @@ type CreateSimulationData = {
     name: string, 
     numberOfAgent: number,
     simulationPeriod: number,
+    logLevel: number,
     createdBy: {
         username: string
     }
@@ -75,6 +76,9 @@ export default function Page() {
                   <p>{formData['numberOfAgent']}</p>
                   <label>Simulation time (T)</label>
                   <p>{formData['simulationPeriod']}</p>
+                  <legend><Typography variant="h5">File</Typography></legend>
+                  <label>Log level</label>
+                  <p>{formData['logLevel']}</p>
                   <Button onClick={handleCancelUpdate}>Cancel</Button>
                   <Button onClick={() => router.back()}>Back</Button>
                   <Button type="submit" variant="contained">Create</Button>

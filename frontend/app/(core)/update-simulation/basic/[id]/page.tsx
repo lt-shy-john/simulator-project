@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from "react-hook-form";
 import { useRouter, useParams } from 'next/navigation';
-import Button from '@mui/material/Button';
-import Typography from '@mui/material/Typography';
+import { Button, Typography, TextField } from '@mui/material';
 
 type Inputs = {
     name: string,
@@ -13,7 +12,7 @@ type Inputs = {
 };
 
 export default function Page({ params, }: { params: Promise<{ id: string }> }) {
-    const { register, handleSubmit, watch, setValue } = useForm<Inputs>();
+    const { register, handleSubmit, watch, setValue, formState: { errors }, } = useForm<Inputs>();
     const router = useRouter();
     const { id } = useParams();
 
@@ -42,7 +41,7 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
         const existing = sessionStorage.getItem('data');
         const formData = existing ? JSON.parse(existing) : {};
         sessionStorage.setItem('data', JSON.stringify({ ...formData, ...data }));
-        router.push('/update-simulation-confirm/'+simuData.id);
+        router.push('/update-simulation-file/'+simuData.id);
     };
 
     return (
@@ -54,11 +53,11 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
                         <label htmlFor="ID"><Typography variant="body1">Simulation ID</Typography></label>
                         <Typography variant="body1">{simuData.id}</Typography>
                         <label htmlFor="Name"><Typography variant="body1">Simulation name</Typography></label>
-                        <input type="text" id="Name" name="Name" {...register("name")} required aria-required="true" /><br />
+                        <TextField id="name" label="Name" variant="outlined" error={!!errors.name} helperText={errors.name?.message} {...register("name", { required: "Name is required" })} required aria-required="true"/>
                         <label htmlFor="N"><Typography variant="body1">Number of agents (N)</Typography></label>
-                        <input type="text" id="N" name="N" {...register("numberOfAgent")} required aria-required="true" /><br />
+                        <TextField id="N" name="N" label="Number of agents" variant="outlined" error={!!errors.name} helperText={errors.name?.message} {...register("numberOfAgent", { required: "Number of agents are required" })} required aria-required="true"/>
                         <label htmlFor="T"><Typography variant="body1">Simulation time (T)</Typography></label>
-                        <input type="text" id="T" name="T" {...register("simulationPeriod")} required aria-required="true" /><br /><br />
+                        <TextField id="T" name="T" label="Simulation time" variant="outlined" error={!!errors.name} helperText={errors.name?.message} {...register("simulationPeriod", { required: "Simulation time is required" })} required aria-required="true"/><br/><br/>
                         <Button onClick={handleCancelUpdate}>Cancel</Button>
                         <Button type="submit" variant="contained">Next</Button>
                     </fieldset>)

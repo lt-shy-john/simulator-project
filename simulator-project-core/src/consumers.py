@@ -39,19 +39,22 @@ class SimulationConsumer(ObserverModelInstanceMixin, GenericAsyncAPIConsumer):
         #     await self.notify_users()
         await super().disconnect(code)
 
+    def message_wrapper(self, request_id, message):
+        return json.dumps({"simulation_run_id": request_id, "message": message})
+
     @action()
-    async def run(self, N, T, **kwargs):
+    async def run(self, request_id, N, T, **kwargs):
         cmd = ['python', '-u', '../simulator-project-simulator/simulator.py', str(N), str(T), 'run']
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
-        await self.send("Running script. ")
+        await self.send(self.message_wrapper(request_id, "Running script. "))
         while process.poll() is None:
             line = process.stdout.readline()
             if line:
                 print(line)
-                await self.send(line)
+                await self.send(self.message_wrapper(request_id, line))
                 await asyncio.sleep(0.01)
 
-        await self.send("Process finished. ")
+        await self.send(self.message_wrapper(request_id, "Process finished. "))
 
         await self.close(code=1000)
 

@@ -14,7 +14,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .models import SimulationRun, RunsRecord, File, Mode
-from .serializers import UserSerializer, SimulationSetterSerializer, SimulationGetterSerializer, SimulationRunStatusGetRequestSerializer, SimulationRunStatusGetResponseSerializer, RunsRecordSetterSerializer, FileSetterSerializer, FileGetterSerializer, ModeSetterSerializer, ModeGetterSerializer, SimulationRunFullSerializer, SimulationRunSetterSerializer, SimulationRunStatusPatchSerializer
+from .serializers import UserSerializer, SimulationSetterSerializer, SimulationGetterSerializer, SimulationRunStatusGetRequestSerializer, SimulationRunStatusGetResponseSerializer, RunsRecordSetterSerializer, FileSetterSerializer, FileGetterSerializer, ModeSetterSerializer, ModeGetterSerializer, SimulationRunFullSerializer, SimulationRunSetterSerializer, SimulationRunGetterSerializer, SimulationRunStatusPatchSerializer
 from .pagination import StandardResultsSetPagination
 
 log = getLogger(__name__)
@@ -318,7 +318,35 @@ def set_file(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @extend_schema(
-        summary="Create new mode document",
+        summary="Get all simulation run records by simulation ID",
+        request=SimulationRunSetterSerializer,
+        responses={
+            201: OpenApiResponse(response=SimulationRunSetterSerializer,
+                                 description='OK'),
+            400: OpenApiResponse(description='Invalid parameter'),
+            404: OpenApiResponse(description='Simulation run not found'),
+        }, methods=["GET"]
+    )
+
+@api_view(['POST'])
+def view_simulation_run_by_simulation_id(request):
+    log.info(f'Started view_simulation_run_by_simulation_id for simulation ID {request.data.get("simulation_id")}.')
+
+    simulation_id = request.data.get("simulation_id")
+
+    if simulation_id is None:
+        simulation_runs = RunsRecord.objects.all().order_by('id')
+    else:
+        simulation_runs = RunsRecord.objects.all().order_by('id').filter(simulation_id=simulation_id)
+    paginator = StandardResultsSetPagination()
+    page = paginator.paginate_queryset(simulation_runs, request)
+    log.info(f'Received {simulation_runs.count()} simulations in set_view_simulation_run().')
+    responseSerializer = SimulationRunGetterSerializer(page, many=True, context={'request': request})
+    return Response({"count": paginator.page.paginator.count, "results": responseSerializer.data},
+                    status=status.HTTP_200_OK)
+
+@extend_schema(
+        summary="Create new simulation run record",
         request=SimulationRunSetterSerializer,
         responses={
             201: OpenApiResponse(response=SimulationRunSetterSerializer,
@@ -326,11 +354,12 @@ def set_file(request):
             400: OpenApiResponse(description='Invalid parameter'),
             404: OpenApiResponse(description='Simulation run not found'),
             409: OpenApiResponse(description='Simulation is running')
-        }
+        }, methods=["POST"]
     )
 @api_view(['POST'])
-def set_simulation_run(request):
-    log.info(f'Started set_simulation_run for simulation ID {request.data.get("simulation_id")}.')
+def set_view_simulation_run(request):
+    log.info(f'Started set_view_simulation_run for simulation ID {request.data.get("simulation_id")}.')
+
     serializer = SimulationRunSetterSerializer(data=request.data)
 
     if not serializer.is_valid():
@@ -338,7 +367,8 @@ def set_simulation_run(request):
     run, created = serializer.save()
 
     if not created:
-        log.info(f'No simulation run for simulation ID {request.data.get("simulation_id")} exists. Creating run ID {run.id}.')
+        log.info(
+            f'No simulation run for simulation ID {request.data.get("simulation_id")} exists. Creating run ID {run.id}.')
         return Response(
             {"id": run.id, "detail": "Simulation already running"},
             status=status.HTTP_409_CONFLICT
@@ -346,6 +376,7 @@ def set_simulation_run(request):
 
     output = SimulationRunFullSerializer(run)
     return Response(output.data, status=status.HTTP_201_CREATED)
+
 
 @extend_schema(
         summary="View simulation run",

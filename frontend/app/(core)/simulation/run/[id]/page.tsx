@@ -166,7 +166,8 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
         <div id="console">
           {log.map((line, index) => (
             <div key={index} id="console-line">
-              <p>{line}</p>
+              <div id="console-line-number"><p>{index}</p></div>
+              <div><p>{line}</p></div>
             </div>
           ))}
         </div>

@@ -50,7 +50,6 @@ This is a plain Python module with the simulation code.
 ## To-do
 * Front end error handling
 * Update simulation status (front end and core)
-* Pick-up running simulations
 * Authenication
 * Logo for this whole project
 * Simulation structure/ language

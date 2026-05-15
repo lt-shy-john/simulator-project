@@ -125,7 +125,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
       }
 
       if (res.status === 409) {
-        const existingRunId = Number(data.id);
+        const existingRunId = Number(data.running_ids.at(-1));
         console.log('Detected existing simulation run. Running simulation run '+existingRunId+'.');
 
         const runRes = await fetch(`${API_BASE}/simulation-runs/${existingRunId}`);

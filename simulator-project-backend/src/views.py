@@ -7,7 +7,7 @@ from django.http import HttpResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -353,8 +353,15 @@ def view_simulation_run_by_simulation_id(request):
                                  description='OK'),
             400: OpenApiResponse(description='Invalid parameter'),
             404: OpenApiResponse(description='Simulation run not found'),
-            409: OpenApiResponse(description='Simulation is running')
-        }, methods=["POST"]
+            409: OpenApiResponse(description='Simulation is running', response={"running_ids": [1, 2, 3], "detail": "Simulation already running"})
+        },
+        methods=["POST"],
+        examples=[
+                OpenApiExample('Simulation is running',
+                value={"running_ids": [1, 2, 3], "detail": "Simulation already running"},
+                response_only=True,
+                status_codes=['409'])
+        ]
     )
 @api_view(['POST'])
 def set_view_simulation_run(request):
@@ -368,12 +375,15 @@ def set_view_simulation_run(request):
 
     if not created:
         log.info(
-            f'No simulation run for simulation ID {request.data.get("simulation_id")} exists. Creating run ID {run.id}.')
+            f'Simulation run for simulation ID {request.data.get("simulation_id")} exists. ')
+        running_ids = [item.id for item in RunsRecord.objects.all().order_by('id').filter(simulation_id=request.data.get("simulation_id"), status="IN_PROGRESS")]
         return Response(
-            {"id": run.id, "detail": "Simulation already running"},
+            {"running_ids": running_ids, "detail": "Simulation already running"},
             status=status.HTTP_409_CONFLICT
         )
 
+    log.info(
+        f'No simulation run for simulation ID {request.data.get("simulation_id")} exists. Creating run ID {run.id}.')
     output = SimulationRunFullSerializer(run)
     return Response(output.data, status=status.HTTP_201_CREATED)
 

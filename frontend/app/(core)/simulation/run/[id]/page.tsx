@@ -17,7 +17,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const runIdRef = useRef<number | null>(null);
 
   const API_BASE = "http://localhost:8000";
-  const WS_URL = "ws://localhost:8001/ws/simulation/";
+  const WS_URL = "ws://localhost:8081/ws/simulation/";
 
   const updateStatus = async (status: SimulationStatus) => {
     const runId = runIdRef.current;

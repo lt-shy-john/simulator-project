@@ -10,7 +10,7 @@ import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material
 import { Chip } from '@mui/material';
 import { grey } from '@mui/material/colors';
 import AlarmIcon  from '@mui/icons-material/Alarm';
-import { DataGrid, GridGetRowsParams, GridGetRowsResponse, GridRowParams, GridActionsCellItem, GridGetRowsError, GridUpdateRowError } from "@mui/x-data-grid";
+import { DataGrid, GridGetRowsParams, GridGetRowsResponse, GridRowParams, GridActionsCellItem, GridGetRowsError, GridUpdateRowError, useGridApiRef } from "@mui/x-data-grid";
 
 import SimuStatus from '../../components/SimuStatus';
 
@@ -140,7 +140,51 @@ export default function Page() {
     const [openDeleteDialogue, setOpenDeleteDialogue] = useState(false);
     const [deleteId, setdeleteId] = useState(null);
     const router = useRouter();
+    const apiRef = useGridApiRef();
     useEffect(() => { setTimeout(() => { setDisplayDatagrid(true); }); }, []);
+
+    useEffect(() => {
+        if (!displayDatagrid) return;
+        const STATUS_POLL_MS = 3000;
+        let cancelled = false;
+
+        async function pollStatuses() {
+            const api = apiRef.current;
+            if (!api) return;
+            const rowModels = api.getRowModels();
+            if (rowModels.size === 0) return;
+            const ids = Array.from(rowModels.keys());
+
+            try {
+                const res = await fetch(
+                    'http://localhost:8000/simulations/simulation-run/status',
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ simulation_id: ids, response_type: 'latest' }),
+                    }
+                );
+                if (!res.ok) return;
+                const data = await res.json();
+                if (cancelled) return;
+
+                data
+                    .filter((s: any) => rowModels.has(s.simulation_id))
+                    .forEach((s: any) => {
+                        const current = rowModels.get(s.simulation_id);
+                        if (current && current.status !== s.status) {
+                            api.updateRows([{ id: s.simulation_id, status: s.status }]);
+                        }
+                    });
+            } catch (err) {
+                console.warn('Status poll failed', err);
+            }
+        }
+
+        const interval = setInterval(pollStatuses, STATUS_POLL_MS);
+        return () => { cancelled = true; clearInterval(interval); };
+    }, [displayDatagrid, apiRef]);
+
     function handleRunSimulation(data) {
         console.log('Running simulation ' + data.id + '.');
         sessionStorage.setItem('simuData', JSON.stringify(data));
@@ -172,7 +216,7 @@ export default function Page() {
         //}, 
         {
             field: "status", headerName: "Status", hideable: false, width: 150, renderCell: (params) => {
-                return <SimuStatus status={params.status} />;
+                return <SimuStatus status={params.value} />;
             },
         },
         {
@@ -191,7 +235,7 @@ export default function Page() {
             <div className="crud-header"><Typography variant="h3">Simulation</Typography></div>
             <div className="crud-header"><Button variant="contained" href='/create-simulation'>Create</Button></div>
             <div style={{ display: 'flex', flexDirection: 'column', height: 400, width: '100%' }}>
-                {displayDatagrid && <DataGrid columns={columns} dataSource={customDataSource} pagination onPaginationModelChange={setPaginationModel} initialState={{
+                {displayDatagrid && <DataGrid apiRef={apiRef} columns={columns} dataSource={customDataSource} pagination onPaginationModelChange={setPaginationModel} initialState={{
                     pagination: { paginationModel },
                 }}
                     onDataSourceError={(error) => {

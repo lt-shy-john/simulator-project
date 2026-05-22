@@ -5,6 +5,8 @@ import { useForm } from "react-hook-form";
 import { useRouter, useParams } from 'next/navigation';
 import { Button, Typography, TextField } from '@mui/material';
 
+import FormErrorBox from '../../../../components/FormErrorBox';
+
 type Inputs = {
     name: string,
     numberOfAgent: number,
@@ -12,7 +14,7 @@ type Inputs = {
 };
 
 export default function Page({ params, }: { params: Promise<{ id: string }> }) {
-    const { register, handleSubmit, watch, setValue, formState: { errors }, } = useForm<Inputs>();
+    const { register, handleSubmit, watch, setValue, formState: { errors }, } = useForm<Inputs>({ mode: 'onChange', });
     const router = useRouter();
     const { id } = useParams();
 
@@ -53,11 +55,15 @@ export default function Page({ params, }: { params: Promise<{ id: string }> }) {
                         <label htmlFor="ID"><Typography variant="body1">Simulation ID</Typography></label>
                         <Typography variant="body1">{simuData.id}</Typography>
                         <label htmlFor="Name"><Typography variant="body1">Simulation name</Typography></label>
-                        <TextField id="name" label="Name" variant="outlined" error={!!errors.name} helperText={errors.name?.message} {...register("name", { required: "Name is required" })} required aria-required="true"/>
+                        <TextField id="name" label="Name" variant="outlined" {...register("name", { required: "Name is required" })} />
                         <label htmlFor="N"><Typography variant="body1">Number of agents (N)</Typography></label>
-                        <TextField id="N" name="N" label="Number of agents" variant="outlined" error={!!errors.name} helperText={errors.name?.message} {...register("numberOfAgent", { required: "Number of agents are required" })} required aria-required="true"/>
+                        <TextField id="N" name="N" label="Number of agents" variant="outlined" {...register("numberOfAgent", { required: "Number of agents are required", valueAsNumber: true, validate: (value) => !isNaN(value) || "Number of agents must be a valid number", })} />
                         <label htmlFor="T"><Typography variant="body1">Simulation time (T)</Typography></label>
-                        <TextField id="T" name="T" label="Simulation time" variant="outlined" error={!!errors.name} helperText={errors.name?.message} {...register("simulationPeriod", { required: "Simulation time is required" })} required aria-required="true"/><br/><br/>
+                        <TextField id="T" name="T" label="Simulation time" variant="outlined" {...register("simulationPeriod", { required: "Simulation time is required", valueAsNumber: true, validate: (value) => !isNaN(value) || "Simulation time must be a valid number", })} /><br/><br/>
+                        
+                        {/* Error Area */}
+                        <FormErrorBox errors={errors} />
+                        
                         <Button onClick={handleCancelUpdate}>Cancel</Button>
                         <Button type="submit" variant="contained">Next</Button>
                     </fieldset>)

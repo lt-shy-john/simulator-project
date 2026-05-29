@@ -59,7 +59,7 @@ cd frontend && npm run dev
 source .venv/bin/activate && cd simulator-project-backend && python3 manage.py runserver
 ```
 
-**Tab 3 — Core** (http://localhost:8081 — WebSocket server)
+**Tab 3 — Core** (http://localhost:8001 — WebSocket server)
 ```bash
 source .venv/bin/activate && cd simulator-project-core && daphne -p 8081 simulationProject.asgi:application
 ```

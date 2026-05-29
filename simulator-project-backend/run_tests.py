@@ -30,10 +30,6 @@ exit_code = pytest.main([
     '-v'
 ])
 
-# Debug
-print(f"DEBUG: reports folder exists: {os.path.exists('reports')}")
-print(f"DEBUG: endpoint_log.json exists: {os.path.exists('reports/endpoint_log.json')}")
-
 # Read endpoint log written by assertStatus during tests
 try:
     with open('reports/endpoint_log.json', 'r', encoding='utf-8') as f:

@@ -1,0 +1,12 @@
+[run]
+plugins = django_coverage_plugin
+source = .
+omit =
+    */migrations/*
+    manage.py
+    simulatorProjectBackend/settings.py
+    *.txt
+    reports/*
+
+[html]
+directory = htmlcov

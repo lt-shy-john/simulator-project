@@ -148,7 +148,7 @@ def set_view_simulation(request):
     log.info(f'Started set_view_simulation.')
     if request.method == 'GET':
         log.info(f'Received GET request for set_view_simulation.')
-        simulations = SimulationRun.objects.all().order_by('id')
+        simulations = SimulationRun.objects.all().order_by('-createDate', '-id')
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(simulations, request)
         log.info(f'Received {simulations.count()} simulations in set_view_simulation().')

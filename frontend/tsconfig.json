@@ -6,7 +6,9 @@
       "esnext"
     ],
     "paths": {
-      "fumadocs-mdx:collections/*": [ ".source/*" ]
+      "fumadocs-mdx:collections/*": [
+        "./.source/*"
+      ]
     },
     "allowJs": true,
     "skipLibCheck": true,
@@ -15,7 +17,7 @@
     "incremental": true,
     "module": "esnext",
     "esModuleInterop": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",

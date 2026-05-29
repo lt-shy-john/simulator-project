@@ -92,7 +92,6 @@ This is a plain Python module with the simulation code.
 
 
 ## To-do
-* Update simulation status (front end and core)
 * Authenication
 * Logo for this whole project
 * Simulation structure/ language

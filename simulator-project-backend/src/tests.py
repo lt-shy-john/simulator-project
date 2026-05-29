@@ -16,13 +16,20 @@ class EndpointTrackingMixin:
     endpoint_log = []
 
     def assertStatus(self, response, expected_status):
-        EndpointTrackingMixin.endpoint_log.append({
+        entry = {
             'endpoint': response.wsgi_request.path,
             'method': response.wsgi_request.method,
             'expected': expected_status,
             'actual': response.status_code,
             'passed': response.status_code == expected_status
-        })
+        }
+        EndpointTrackingMixin.endpoint_log.append(entry)
+
+        # Write to file immediately after each test
+        os.makedirs('reports', exist_ok=True)
+        with open('reports/endpoint_log.json', 'w') as f:
+            json.dump(EndpointTrackingMixin.endpoint_log, f)
+
         self.assertEqual(response.status_code, expected_status)
 
 # Create your tests here.
@@ -428,15 +435,3 @@ class RunRecordsTestCase(EndpointTrackingMixin, TestCase):
 
         # Assert
         self.assertStatus(response, status.HTTP_200_OK)
-
-def print_endpoint_coverage():
-    print("\n===== ENDPOINT & STATUS COVERAGE =====")
-    print(f"{'Method':<8} {'Endpoint':<50} {'Status':<10} {'Result'}")
-    print("-" * 85)
-    for log in EndpointTrackingMixin.endpoint_log:
-        result = '✓ PASS' if log['passed'] else '✗ FAIL'
-        print(f"{log['method']:<8} {log['endpoint']:<50} {log['actual']:<10} {result}")
-    print(f"\nTotal endpoints tested: {len(EndpointTrackingMixin.endpoint_log)}")
-
-import atexit
-atexit.register(print_endpoint_coverage)

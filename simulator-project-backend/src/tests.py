@@ -1,13 +1,32 @@
-from unittest import TestCase
+import django
+import os
+from django.test import TestCase
 import json
 
-from .views import *
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "simulatorProjectBackend.settings")
+django.setup()
+
+from src.views import *
 
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+# Track status code
+class EndpointTrackingMixin:
+    endpoint_log = []
+
+    def assertStatus(self, response, expected_status):
+        EndpointTrackingMixin.endpoint_log.append({
+            'endpoint': response.wsgi_request.path,
+            'method': response.wsgi_request.method,
+            'expected': expected_status,
+            'actual': response.status_code,
+            'passed': response.status_code == expected_status
+        })
+        self.assertEqual(response.status_code, expected_status)
+
 # Create your tests here.
-class SimulationTestCase(TestCase):
+class SimulationTestCase(EndpointTrackingMixin, TestCase):
     def setUp(self):
         self.client = APIClient()
 
@@ -16,8 +35,7 @@ class SimulationTestCase(TestCase):
         response = self.client.get(reverse('Get all/ record simulation'))
         response_body = json.loads(response.content)
         # Assert
-        # print(response_body)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
         self.assertEqual(response_body[0].get('id'), 1)
 
     def testGetSimulationByIdSuccess(self):
@@ -30,7 +48,7 @@ class SimulationTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
         self.assertEqual(response_body.get('id'), actual_id)
 
     def testGetSimulationByIdNonexistentId(self):
@@ -43,7 +61,7 @@ class SimulationTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertStatus(response, status.HTTP_404_NOT_FOUND)
 
     def testSetSimulationSuccess(self):
         # Arrange
@@ -54,7 +72,7 @@ class SimulationTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertStatus(response, status.HTTP_201_CREATED)
 
     def testSetSimulationInvalidNTType(self):
         # Arrange
@@ -66,7 +84,7 @@ class SimulationTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertStatus(response, status.HTTP_400_BAD_REQUEST)
 
     def testSetSimulationInvalidUser(self):
         # Arrange
@@ -79,7 +97,7 @@ class SimulationTestCase(TestCase):
 
         # Assert
         # We will forgive the error and log the issue, user should be added manually after
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertStatus(response, status.HTTP_201_CREATED)
 
     def testViewSimulationRunStatusAllSuccess(self):
         # Arrange
@@ -90,7 +108,7 @@ class SimulationTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
 
     def testViewSimulationRunStatusLatestSuccess(self):
         # Arrange
@@ -101,7 +119,7 @@ class SimulationTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
 
     def testViewSimulationRunStatusListLatestSuccess(self):
         # Arrange
@@ -112,7 +130,7 @@ class SimulationTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
 
     def testViewSimulationRunStatusNonexistentSimulationId(self):
         # Arrange
@@ -123,7 +141,7 @@ class SimulationTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertStatus(response, status.HTTP_400_BAD_REQUEST)
 
     def testViewSimulationRunStatusEmptySimulationId(self):
         # Arrange
@@ -131,10 +149,9 @@ class SimulationTestCase(TestCase):
 
         # Act
         response = self.client.post(reverse('Get simulation run status'), request, format='json')
-        response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertStatus(response, status.HTTP_204_NO_CONTENT)
 
     def testPatchSimulationSuccess(self):
         # Arrange
@@ -145,7 +162,7 @@ class SimulationTestCase(TestCase):
         response = self.client.patch(reverse('Operation on simulation set  by ID', kwargs=param))
         response_body = json.loads(response.content)
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
 
     def testPatchSimulationDateSuccess(self):
         # Arrange
@@ -156,22 +173,22 @@ class SimulationTestCase(TestCase):
         response = self.client.patch(reverse('Update simulation run', kwargs=param))
         response_body = json.loads(response.content)
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
 
     def testPatchSimulationDateNonexistentId(self):
-        # Arrange
-        actual_id = 'string'
+        # Arrange - use a valid integer that doesn't exist in DB
+        actual_id = 999999
         param = {'id': actual_id}
 
         # Act
         response = self.client.patch(reverse('Update simulation run', kwargs=param))
         response_body = json.loads(response.content)
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertStatus(response, status.HTTP_404_NOT_FOUND)
 
     def testPatchSimulationDateInvalidIdType(self):
-        # Arrange
-        actual_id = 'string'
+        # Arrange - use a valid integer that doesn't exist in DB
+        actual_id = 999999
         param = {'id': actual_id}
 
         # Act
@@ -179,10 +196,10 @@ class SimulationTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertStatus(response, status.HTTP_404_NOT_FOUND)
 
 
-class FileTestCase(TestCase):
+class FileTestCase(EndpointTrackingMixin, TestCase):
     def setUp(self):
         self.client = APIClient()
 
@@ -196,7 +213,7 @@ class FileTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
         self.assertEqual(response_body.get('id'), 1)
 
     def testGetFileRecordByIdNonexistentId(self):
@@ -209,7 +226,7 @@ class FileTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertStatus(response, status.HTTP_404_NOT_FOUND)
 
     def testSetFileRecordSuccess(self):
         # Arrange
@@ -221,7 +238,7 @@ class FileTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertStatus(response, status.HTTP_201_CREATED)
 
     def testSetFileRecordNonexistentSimulationId(self):
         # Arrange
@@ -230,13 +247,12 @@ class FileTestCase(TestCase):
 
         # Act
         response = self.client.post(reverse('Upload file record'), request, format='json')
-        # response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertStatus(response, status.HTTP_404_NOT_FOUND)
 
 
-class ModeTestCase(TestCase):
+class ModeTestCase(EndpointTrackingMixin, TestCase):
     def setUp(self):
         self.client = APIClient()
 
@@ -250,7 +266,7 @@ class ModeTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
         self.assertEqual(response_body.get('id'), 1)
 
     def testGetModeByIdNonexistentId(self):
@@ -263,7 +279,7 @@ class ModeTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertStatus(response, status.HTTP_404_NOT_FOUND)
 
     def testSetModeSuccess(self):
         # Arrange
@@ -275,7 +291,7 @@ class ModeTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertStatus(response, status.HTTP_201_CREATED)
 
     def testSetModeNonexistentSimulationId(self):
         # Arrange
@@ -287,7 +303,7 @@ class ModeTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertStatus(response, status.HTTP_404_NOT_FOUND)
 
     def testSetModeNonexistentLocation(self):
         request = {'simulation_id': 1, 'name': 'Mode name', 'location': 'wrong_location',
@@ -298,7 +314,7 @@ class ModeTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertStatus(response, status.HTTP_400_BAD_REQUEST)
 
     def testPatchModeSuccess(self):
         actual_id = 1
@@ -311,7 +327,7 @@ class ModeTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
 
     def testPatchModeNonexistentId(self):
         actual_id = 999
@@ -324,7 +340,7 @@ class ModeTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertStatus(response, status.HTTP_400_BAD_REQUEST)
 
     def testPatchModeNonexistentSimulationId(self):
         actual_id = 999
@@ -337,7 +353,7 @@ class ModeTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertStatus(response, status.HTTP_400_BAD_REQUEST)
 
     def testPatchModeNonexistentLocation(self):
         # Arrange
@@ -351,9 +367,9 @@ class ModeTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertStatus(response, status.HTTP_400_BAD_REQUEST)
 
-class RunRecordsTestCase(TestCase):
+class RunRecordsTestCase(EndpointTrackingMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.admin_user, _ = User.objects.get_or_create(username='admin')
@@ -370,7 +386,7 @@ class RunRecordsTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertStatus(response, status.HTTP_201_CREATED)
 
     def testViewSimulationRunSuccess(self):
         # Act
@@ -378,7 +394,7 @@ class RunRecordsTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
 
     def testViewSimulationRunBySimulationIDSuccess(self):
         # Arrange
@@ -389,7 +405,7 @@ class RunRecordsTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
 
     def testPatchSimulationRunSuccess(self):
         # Arrange
@@ -400,7 +416,7 @@ class RunRecordsTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
 
     def testPatchSimulationRunSuccessWithLowerCase(self):
         # Arrange
@@ -411,4 +427,16 @@ class RunRecordsTestCase(TestCase):
         response_body = json.loads(response.content)
 
         # Assert
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertStatus(response, status.HTTP_200_OK)
+
+def print_endpoint_coverage():
+    print("\n===== ENDPOINT & STATUS COVERAGE =====")
+    print(f"{'Method':<8} {'Endpoint':<50} {'Status':<10} {'Result'}")
+    print("-" * 85)
+    for log in EndpointTrackingMixin.endpoint_log:
+        result = '✓ PASS' if log['passed'] else '✗ FAIL'
+        print(f"{log['method']:<8} {log['endpoint']:<50} {log['actual']:<10} {result}")
+    print(f"\nTotal endpoints tested: {len(EndpointTrackingMixin.endpoint_log)}")
+
+import atexit
+atexit.register(print_endpoint_coverage)

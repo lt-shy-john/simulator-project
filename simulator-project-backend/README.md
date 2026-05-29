@@ -25,8 +25,20 @@ You need to install the following libraries
 Add the requirements from `requirements.txt` at the root folder. It is recommended to create a virtual environment (i.e. a new `.venv` folder) at the root folder. 
 
 ## Testing
-At the root of the Simulation Project Backend folder, run `py manage.py test`. 
+At the root of the Simulation Project Backend folder, run `bash run_reports.sh`. This will run all tests and generate two reports:
 
-To export the test results, you can run `py manage.py test > test_result_{date}.txt`. 
+* `reports/test_report.html` — shows which tests passed or failed
+* `htmlcov/index.html` — shows line-by-line test coverage
+
+To view the coverage report in your browser, serve it locally:
+```bash
+cd htmlcov
+python -m http.server 8080
+```
+Then open `http://localhost:8080` in your browser.
 
 ## Contributing
+
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+
+Please make sure to update tests as appropriate.

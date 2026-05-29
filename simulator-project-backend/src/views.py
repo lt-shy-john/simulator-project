@@ -250,7 +250,7 @@ def get_mode_by_id(request, id):
 @csrf_exempt
 @api_view(['PATCH'])
 def patch_mode_by_id(request, id):
-    return None
+    return Response({'message': 'Not implemented yet'}, status=status.HTTP_501_NOT_IMPLEMENTED)
 
 @csrf_exempt
 @extend_schema(

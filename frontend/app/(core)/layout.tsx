@@ -1,3 +1,4 @@
+import { AppRouterCacheProvider } from '@mui/material-nextjs/v16-appRouter'
 import '../ui/global.css'
 import '../ui/home.module.css'
 import { Header, Footer } from '../ui/global-components'
@@ -16,9 +17,11 @@ export default function RootLayout({
           <title>Agent Based Simulator</title>
         </head>
         <body>
-            <Header />
-            {children}
-            <Footer/>
+            <AppRouterCacheProvider>
+              <Header />
+              {children}
+              <Footer/>
+            </AppRouterCacheProvider>
         </body>
       </html>
     )

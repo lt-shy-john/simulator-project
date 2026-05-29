@@ -3,13 +3,22 @@ import { red, blue, lightGreen, green, grey, blueGrey } from '@mui/material/colo
 import AlarmIcon from '@mui/icons-material/Alarm';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import FiberNewOutlinedIcon from '@mui/icons-material/FiberNewOutlined';
 
 export default function SimuStatus(props) {
     let color: String = grey[200];
     let label: String = "Undetermined";
     let icon: any = <Avatar sx={{ bgcolor: grey[100], height: '28px', width: '28px' }}><AlarmIcon sx={{ color: grey[500] }} /></Avatar>;
     let label_color: String = grey[800];
-    switch (props.status) {
+    const normalized = String(props.status ?? "").toLowerCase().replace(/\s+/g, "_");
+    switch (normalized) {
+        case "never_run":
+        case "created":
+            color = blueGrey[50];
+            label = "Created";
+            label_color = blueGrey[700];
+            icon = <Avatar sx={{ bgcolor: blueGrey[50], height: '28px', width: '28px' }}><FiberNewOutlinedIcon sx={{ color: blueGrey[700] }} /></Avatar>;
+            break;
         case "in_progress":
             color = blue[100];
             label = "In Progress";

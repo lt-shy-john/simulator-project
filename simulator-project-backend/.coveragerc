@@ -4,6 +4,7 @@ source = .
 omit =
     */migrations/*
     manage.py
+    src/tests.py
     simulatorProjectBackend/settings.py
     *.txt
     reports/*

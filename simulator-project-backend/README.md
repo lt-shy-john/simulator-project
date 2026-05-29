@@ -25,9 +25,10 @@ You need to install the following libraries
 Add the requirements from `requirements.txt` at the root folder. It is recommended to create a virtual environment (i.e. a new `.venv` folder) at the root folder. 
 
 ## Testing
-At the root of the Simulation Project Backend folder, run `bash run_reports.sh`. This will run all tests and generate two reports:
+At the root of the Simulation Project Backend folder, run `bash run_reports.sh`. This will run all tests and generate three reports:
 
 * `reports/test_report.html` — shows which tests passed or failed
+* `reports/endpoint_coverage_{date}.txt` — shows which endpoints and status codes were tested
 * `htmlcov/index.html` — shows line-by-line test coverage
 
 To view the coverage report in your browser, serve it locally:

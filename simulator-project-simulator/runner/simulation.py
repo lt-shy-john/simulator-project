@@ -1,13 +1,14 @@
 import random
 import time
 import datetime
+import logging
 
 class Simulation():
-    def __init__(self, N, T, logger, **params):
+    def __init__(self, N, T, **params):
         self.N = N
         self.T = T
 
-        self.logger = logger
+        self.logger = logging.getLogger('simulator')
 
         # Other params
         self.params = params

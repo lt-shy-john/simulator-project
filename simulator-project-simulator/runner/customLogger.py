@@ -19,9 +19,9 @@ class LevelFormatter(logging.Formatter):
         return super(LevelFormatter, self).format(record)
 
 
-def gen_logging(filename, verbose_flag = 'info'):
+def gen_logging(filename, main_file='simulator', verbose_flag = 'info'):
 
-    root = logging.getLogger(__name__)
+    root = logging.getLogger(main_file)
 
     if filename != "":
         os.makedirs(f"./data/{filename}", exist_ok=True)

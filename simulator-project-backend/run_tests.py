@@ -19,8 +19,11 @@ def export_endpoint_coverage(endpoint_log):
 
     date = datetime.now().strftime('%Y%m%d_%H%M%S')
     os.makedirs('reports', exist_ok=True)
-    with open(f'reports/endpoint_coverage_{date}.txt', 'w', encoding='utf-8') as f:
+    filepath = f'reports/endpoint_coverage_{date}.txt'
+    print(f"DEBUG: Writing to {filepath}")
+    with open(filepath, 'w', encoding='utf-8') as f:
         f.write(output)
+    print(f"DEBUG: Successfully written to {filepath}")
 
 # Run pytest and save exit code
 exit_code = pytest.main([
@@ -34,9 +37,12 @@ exit_code = pytest.main([
 try:
     with open('reports/endpoint_log.json', 'r', encoding='utf-8') as f:
         endpoint_log = json.load(f)
+    print(f"DEBUG: Loaded {len(endpoint_log)} entries from endpoint_log.json")
     export_endpoint_coverage(endpoint_log)
 except FileNotFoundError:
     print("No endpoint log found — skipping endpoint coverage export.")
+except Exception as e:
+    print(f"Error exporting endpoint coverage: {e}")
 
 # Exit with pytest exit code
 sys.exit(exit_code)

@@ -9,22 +9,33 @@ import runner.customLogger as logger
 filename = 'Test-' + datetime.datetime.now().strftime("%Y%m%d")
 root_logger = logger.gen_logging(filename, os.path.splitext(os.path.basename(__file__))[0] ,None)
 
-# Express mode
-if len(sys.argv) > 2:
+# Initial settings and express mode
+if len(sys.argv) == 3:
     try:
         N = int(sys.argv[1])
     except IndexError:
-        print("No simulation agent number specified.")
-        N = 3
+        root_logger.info("No simulation agent number specified.")
+        commands.set_N()
     try:
         T = int(sys.argv[2])
     except IndexError:
-        print("No simulation agent time specified.")
-        T = 10
+        root_logger.info("No simulation agent time specified.")
+        commands.set_T()
 
     if sys.argv[-1] == 'run':
         simulation = Simulation(N, T, root_logger, name=filename)
         simulation()
+else:
+    if sys.argv[-1] == 'help':
+        commands.usage()
+        commands.do_help()
+        sys.exit(0)
+    if len(sys.argv) == 2:
+        commands.settings['N'] = int(sys.argv[1])
+        commands.set_T()
+    else:
+        commands.basic_settings()
+
 
 # Normal interface
 

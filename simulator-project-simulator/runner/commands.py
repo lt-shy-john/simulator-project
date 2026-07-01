@@ -2,6 +2,7 @@ import sys
 import inspect
 import logging
 
+import util.util as util
 from runner.simulation import Simulation
 
 logger = logging.getLogger('simulator')
@@ -54,8 +55,8 @@ def basic_settings():
 
 def set_N():
     logger.info('Please enter number of agents: ')
-    settings["N"] = int(input("> "))
+    settings["N"] = util.prompt_int()
 
 def set_T():
     logger.info('Please enter simulation time (steps): ')
-    settings["T"] = int(input("> "))
+    settings["T"] = util.prompt_int()

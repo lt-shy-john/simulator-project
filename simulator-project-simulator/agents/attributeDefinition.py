@@ -1,7 +1,7 @@
 from pydantic import BaseModel, model_validator
 
-from agents.models import AttributeType, PopulationMethod
-from agents.distributions import Distribution
+from .models import AttributeType, PopulationMethod
+from .distributions import Distribution
 
 class AttributeDefinition(BaseModel):
     name: str

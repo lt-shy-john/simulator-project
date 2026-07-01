@@ -1,5 +1,5 @@
-from attributeDefinition import AttributeDefinition
-from models import GenerationMode, PopulationMethod, PopulationStatus
+from .attributeDefinition import AttributeDefinition
+from .models import GenerationMode, PopulationMethod, PopulationStatus
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -19,8 +19,8 @@ class AgentType(BaseModel):
 
     @model_validator(mode="after")
     def _check_count(self) -> "AgentType":
-        if self.count < 0:
-            raise ValueError(f"agent type '{self.name}': count must be >= 0, got {self.count}")
+        if self.count <= 0:
+            raise ValueError(f"agent type '{self.name}': count must be > 0, got {self.count}")
         return self
 
     @model_validator(mode="after")

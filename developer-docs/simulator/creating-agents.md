@@ -1,4 +1,4 @@
-# ABM Wizard Framework — 11 Elements
+# Creating Agents
 
 ## Purpose
 
@@ -50,32 +50,34 @@ are tracked separately in ticket **DESIGN-01**.
 
 ## The 11 elements, by group
 
+![The agent creation is based on 3 layers](../public/img/abm_full_system_summary.png)
+
 ### Group 1 — Structure: what exists in the model
 
-| Element | Covers |
-|---|---|
-| **Agent** | Type, count, heterogeneity |
-| **State** | Attributes, types, distributions |
-| **Interaction topology** | All-pairs, random, network (replaces the old standalone "Network" element) |
-| **Environment** | Spatial grid, patches |
+| Element | Covers | Detail            | 
+|---|---|-------------------|
+| **Agent** | Type, count, heterogeneity | `step-1-agent.md` |
+| **State** | Attributes, types, distributions | `step-2-state.md` |
+| **Interaction topology** | All-pairs, random, network (replaces the old standalone "Network" element) |                   |
+| **Environment** | Spatial grid, patches |                   |
 
 ### Group 2 — Behaviour: what happens each step
 
-| Element | Covers |
-|---|---|
-| **Behaviour / rules** | Two layers: pre-built modules for complex logic, expression fields for simple state updates |
-| **Scheduling** | All-at-once / random turns / priority ordering; live vs. snapshot state updates |
-| **Agent lifecycle** | Reproduction, external entry; condition-based + probabilistic removal |
+| Element | Covers | Detail | 
+|---|---|---|
+| **Behaviour / rules** | Two layers: pre-built modules for complex logic, expression fields for simple state updates | |
+| **Scheduling** | All-at-once / random turns / priority ordering; live vs. snapshot state updates | |
+| **Agent lifecycle** | Reproduction, external entry; condition-based + probabilistic removal | |
 
 ### Group 3 — Operation: how the simulation runs and what it produces
 
-| Element | Covers |
-|---|---|
-| **Initialisation** | Population size, attribute distributions, CSV import |
-| **Stopping conditions** | Fixed limit (always on) plus condition expressions, AND/OR |
-| **Data collection** | Aggregate (on by default), agent-level (opt-in), events, export |
-| **Global parameters** | Flat, time-varying, or computed; sweep support built in |
-| **Randomness** | Fixed seed or new seed per run; multiple runs; multiple streams |
+| Element | Covers | Detail | 
+|---|---|---|
+| **Initialisation** | Population size, attribute distributions, CSV import | |
+| **Stopping conditions** | Fixed limit (always on) plus condition expressions, AND/OR | |
+| **Data collection** | Aggregate (on by default), agent-level (opt-in), events, export | |
+| **Global parameters** | Flat, time-varying, or computed; sweep support built in | |
+| **Randomness** | Fixed seed or new seed per run; multiple runs; multiple streams | |
 
 A **Review** stage follows all three groups, before a config can be executed.
 
@@ -102,17 +104,3 @@ each step) and *within an agent* (action order and state visibility).
 Labels are plain-language (not "sync"/"async"). Conflict resolution is
 always explicit rather than implied. Per-behaviour scheduling overrides are
 deferred to v2.
-
----
-
-## Open items / not yet settled
-
-The following are referenced elsewhere (e.g. placeholder tickets) as
-blocking dependencies and are not finalised:
-
-- Full **Behaviour** element spec
-- Full **Scheduling** element spec
-- Full **Data collection** element spec
-
-Work that depends on these (e.g. "execute simulation from finished config")
-is tracked as a placeholder ticket until these are settled.

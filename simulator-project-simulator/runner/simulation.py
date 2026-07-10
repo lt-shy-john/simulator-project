@@ -31,3 +31,4 @@ class Simulation():
         if filename != "":
             self.logger.info(f"Log file printed in {filename}.txt")
         self.logger.info(f"Simulation finished in {datetime.datetime.now() - start_time}. ")
+

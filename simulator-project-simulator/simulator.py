@@ -4,7 +4,7 @@ import datetime
 
 import runner.commands as commands
 from runner.simulation import Simulation
-import runner.customLogger as logger
+import util.customLogger as logger
 
 filename = 'Test-' + datetime.datetime.now().strftime("%Y%m%d")
 root_logger = logger.gen_logging(filename, os.path.splitext(os.path.basename(__file__))[0] ,None)

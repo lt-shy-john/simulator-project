@@ -22,3 +22,7 @@ def mixed_type_soa():
         for i in range(5)
     ]
     return to_soa(agents)
+
+@pytest.fixture
+def sample_soa_single_agent():
+    return to_soa([AgentState(agent_id=str(uuid.uuid4()), agent_type_name='person', state={'energy': 1})])

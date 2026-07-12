@@ -43,6 +43,7 @@ import networkx as nx
 
 from runner.soa import SoAPopulation, ID_KEY
 from topology.graph_builder import build_graph
+from topology.topology import validate_agent_types
 
 
 class NetworkTopology:
@@ -93,18 +94,22 @@ class NetworkTopology:
                  node relabelling and validation
 
         Raises:
-            ValueError: if 'graph' section is missing from config
+            ValueError: if 'graph' section is missing from config, or if
+                agent_types contains a type not present in soa
         """
         if "graph" not in config:
             raise ValueError(
                 "Network topology config must contain a 'graph' section."
             )
 
+        agent_types = config.get("agent_types", None)
+        validate_agent_types(agent_types, soa)
+
         graph = build_graph(config["graph"], soa)
 
         return cls(
             graph=graph,
-            agent_types=config.get("agent_types", None),
+            agent_types=agent_types,
         )
 
     def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:

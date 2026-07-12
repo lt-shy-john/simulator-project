@@ -92,6 +92,40 @@ class TopologyProtocol(Protocol):
 
 
 # ---------------------------------------------------------------------------
+# Shared validation
+# ---------------------------------------------------------------------------
+
+def validate_agent_types(agent_types: list[str] | None, soa: SoAPopulation) -> None:
+    """Validate that every type name in agent_types exists in the SoAPopulation.
+
+    Shared across all_pairs, random_sample, and network topology implementations
+    to keep validation behaviour consistent. Raises loudly rather than silently
+    filtering to an empty neighbour list, which would otherwise be very hard
+    to debug (e.g. a typo'd agent type name silently produces an empty
+    simulation with no error).
+
+    Args:
+        agent_types: list of agent type names to validate, or None (no-op)
+        soa: the current SoAPopulation, used as the source of truth for
+             which agent types actually exist
+
+    Raises:
+        ValueError: if any name in agent_types is not a known agent type in soa
+    """
+    if agent_types is None:
+        return
+
+    known_types = set(soa.keys())
+    unknown = [t for t in agent_types if t not in known_types]
+
+    if unknown:
+        raise ValueError(
+            f"agent_types contains unknown type(s): {unknown}. "
+            f"Known agent types in population: {sorted(known_types)}"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 

@@ -32,6 +32,7 @@ Config shape:
 from __future__ import annotations
 
 from runner.soa import SoAPopulation, ID_KEY
+from topology.topology import validate_agent_types
 
 
 class AllPairsTopology:
@@ -65,12 +66,18 @@ class AllPairsTopology:
                     "mode": "all_pairs",
                     "agent_types": ["predator", "prey"]
                 }
-            soa: the current SoAPopulation (unused by AllPairsTopology,
-                 accepted for Protocol consistency)
+            soa: the current SoAPopulation, used to validate agent_types
+                 refers to real agent types present in the population
+
+        Raises:
+            ValueError: if agent_types contains a type not present in soa
         """
+        agent_types = config.get("agent_types", None)
+        validate_agent_types(agent_types, soa)
+
         return cls(
             allow_self_interaction=config.get("allow_self_interaction", False),
-            agent_types=config.get("agent_types", None),
+            agent_types=agent_types,
         )
 
     def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:

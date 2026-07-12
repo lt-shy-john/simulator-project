@@ -43,6 +43,7 @@ import math
 import numpy as np
 
 from runner.soa import SoAPopulation, ID_KEY
+from topology.topology import validate_agent_types
 
 
 class RandomSampleTopology:
@@ -88,7 +89,7 @@ class RandomSampleTopology:
         self.rng = np.random.default_rng(seed)
 
     @classmethod
-    def from_config(cls, config: dict) -> "RandomSampleTopology":
+    def from_config(cls, config: dict, soa: SoAPopulation) -> "RandomSampleTopology":
         """Construct from a topology config section.
 
         Args:
@@ -100,11 +101,13 @@ class RandomSampleTopology:
                     "agent_types": ["person"]
                 }
         """
+        agent_types = config.get("agent_types", None)
+        validate_agent_types(agent_types, soa)
         return cls(
             k=config.get("k", None),
             proportion=config.get("proportion", None),
             seed=config.get("seed", None),
-            agent_types=config.get("agent_types", None),
+            agent_types=agent_types,
         )
 
     def _get_eligible_pool(self, agent_id: str, soa: SoAPopulation) -> list[str]:

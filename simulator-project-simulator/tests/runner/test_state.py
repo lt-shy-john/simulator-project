@@ -134,4 +134,4 @@ def test_snapshot_update_success():
     snapshots[target_idx].set('state1', 2)
 
     result = apply_snapshot_updates(population, snapshots)
-    assert result[target_idx].state['state1'] == 99
+    assert result[target_idx].state['state1'] == 2

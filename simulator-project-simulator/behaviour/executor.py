@@ -118,12 +118,18 @@ def compile_behaviours(
         preserving config order (Python dicts preserve insertion order)
 
     Raises:
-        ValueError: if a behaviour entry has neither 'module' nor
-            'expression', if topology_name references an unknown
-            topology, if write_mode is invalid, or if a module name
-            is not registered
+    ValueError: if the 'behaviour' section is missing or empty, if a
+        behaviour entry has neither 'module' nor 'expression', if
+        topology_name references an unknown topology, if write_mode
+        is invalid, or if a module name is not registered
     """
     behaviour_config = config.get("behaviour", {})
+    if not behaviour_config:
+        raise ValueError(
+            "Config must contain a 'behaviour' section with at least one agent "
+            "type's behaviour sequence defined."
+        )
+
     compiled: dict[str, list[CompiledEntry]] = {}
 
     for agent_type_name, entries in behaviour_config.items():

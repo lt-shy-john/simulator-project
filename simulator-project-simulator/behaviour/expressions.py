@@ -145,11 +145,16 @@ def evaluate_expression(
         raise ValueError(
             f"Expression '{expr}' failed to evaluate safely: {e}"
         ) from e
-    except (SyntaxError, ZeroDivisionError, TypeError, NameError) as e:
+    except (SyntaxError, NameError) as e:
         raise ValueError(
             f"Expression '{expr}' failed to evaluate: {e}"
         ) from e
 
     current_value = agent.get(key) if op != "=" else None
+    try:
+        new_value = _SUPPORTED_OPS[op](current_value, rhs_value)
+    except (ZeroDivisionError, TypeError) as e:
+        raise ValueError(f"Expression '{expr}' failed to apply: {e}") from e
+    agent.set(key, new_value)
     new_value = _SUPPORTED_OPS[op](current_value, rhs_value)
     agent.set(key, new_value)

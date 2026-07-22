@@ -57,7 +57,7 @@ def test_run_step_expr_success(sample_agents_dict):
 
     compiled = compile_behaviours(config, pairs)
 
-    run_step(sample_agents_dict, compiled, pairs, None)
+    run_step(sample_agents_dict, compiled, pairs, None, None)
 
     for agents in sample_agents_dict.values():
         assert agents.state['energy'] == 1
@@ -75,7 +75,7 @@ def test_run_step_module_success(sample_agents_dict):
 
     compiled = compile_behaviours(config, pairs)
 
-    run_step(sample_agents_dict, compiled, pairs, None)
+    run_step(sample_agents_dict, compiled, pairs, None, None)
 
     for agents in sample_agents_dict.values():
         assert agents.state['energy'] == 2
@@ -97,7 +97,7 @@ def test_run_step_self_write_visible_to_next_entry(sample_agents_dict):
     agent = list(sample_agents_dict.values())[0]
     agent.state["energy"] = 5
 
-    run_step({agent.agent_id: agent}, compiled, pairs, None)
+    run_step({agent.agent_id: agent}, compiled, pairs, None, None)
 
     # If the expression saw the module's +1 first, result is (5+1)+10 = 16.
     # If it only saw the original value, result would be 5+10 = 15 (wrong).
@@ -117,7 +117,7 @@ def test_run_step_immediate_neighbour_write_applies_within_step(sample_agents_di
     pairs = build_topologies(config, to_soa(list(sample_agents_dict.values())))
     compiled = compile_behaviours(config, pairs)
 
-    run_step(sample_agents_dict, compiled, pairs, None)
+    run_step(sample_agents_dict, compiled, pairs, None, None)
 
     for agent in sample_agents_dict.values():
         assert agent.state["energy"] == 0
@@ -141,6 +141,6 @@ def test_run_step_module_with_params_success(sample_agents_dict):
     agent = list(sample_agents_dict.values())[0]
     agent.state["energy"] = 10
 
-    run_step({agent.agent_id: agent}, compiled, pairs, None)
+    run_step({agent.agent_id: agent}, compiled, pairs, None, None)
 
     assert agent.state["energy"] == 17  # 10 + 7

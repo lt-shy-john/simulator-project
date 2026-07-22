@@ -1,5 +1,5 @@
 """
-accessor.py — NeighbourAccessor (S-05).
+accessor.py — NeighbourAccessor (S-05, updated for S-06 scheduling).
 
 Scope:
   - NeighbourAccessor: the only way a behaviour module can read or write
@@ -8,31 +8,30 @@ Scope:
     rather than merely a convention module authors have to remember.
 
 Design notes:
-  - Reads always come from the frozen, start-of-step population snapshot
-    (strict t-1). This is independent of write_mode — read behaviour never
-    varies. A module always sees neighbours as they were before this step
-    began, never a neighbour's in-progress mutations from earlier in the
-    same step's agent-processing order.
-  - Writes depend on write_mode, set by the executor from config — the
-    module itself has no write_mode parameter and cannot control this:
-      - "immediate": write lands directly in the live population, visible
-        to that neighbour's own module sequence if/when it runs later in
-        this same step (or, if already run, does nothing until next step's
-        read, since that agent's sequence already executed against its
-        own snapshot for this step).
+  - UPDATED (S-06): reads no longer come unconditionally from a strict
+    t-1 snapshot. Which population dict backs reads is now determined by
+    executor.py based on schedule.read_mode ("frozen" or "live") — see
+    scheduling.py. This constructor parameter is named `read_source`
+    (previously `frozen_population`) to reflect that it's whichever
+    population the executor decided reads should come from this step,
+    not always the pre-step snapshot. Under read_mode == "frozen", the
+    executor passes the pre-step snapshot here (old S-05 behaviour,
+    unchanged in effect). Under read_mode == "live", the executor passes
+    the live, currently-being-mutated population instead, allowing
+    same-step cascades (an agent processed later in this step's order
+    can see an earlier agent's mutations from this same step).
+  - Writes still depend on write_mode, set by the executor from config —
+    this is unchanged by S-06 and independent of read_mode:
+      - "immediate": write lands directly in the live population.
       - "deferred": write is queued and only applied when the step ends,
-        via apply_deferred_writes(). No agent sees the effect of a deferred
-        write until the following step.
+        via apply_deferred_writes().
   - Self-writes (agent mutating agent.state directly, not through this
     accessor) are always live by design — see base.py. This accessor is
     only for neighbour access.
 
 Not in scope here:
-  - Atomic/paired writes (e.g. simultaneous game-theory payoff crediting
-    for both participants in one operation) — current design only supports
-    single-key, single-target writes. Worth revisiting if paired-write
-    correctness issues surface once game theory / stock market style
-    modules are built.
+  - Atomic/paired writes (e.g. simultaneous game-theory payoff crediting) —
+    current design only supports single-key, single-target writes.
 """
 
 from __future__ import annotations
@@ -51,65 +50,69 @@ class NeighbourAccessor:
 
     A new NeighbourAccessor is constructed by the executor for each
     module invocation, configured with that module's write_mode from
-    config. Modules interact with neighbours exclusively through this
-    object — never through a raw AgentState reference.
+    config, and with a read_source chosen according to schedule.read_mode
+    (see scheduling.py). Modules interact with neighbours exclusively
+    through this object — never through a raw AgentState reference.
     """
 
     def __init__(
         self,
-        frozen_population: dict[str, AgentState],
+        read_source: dict[str, AgentState],
         live_population: dict[str, AgentState],
         deferred_writes: list[tuple[str, str, Any]],
         write_mode: WriteMode,
     ):
         """
         Args:
-            frozen_population: agent_id -> AgentState, captured at the
-                start of this step, before any agent has been processed.
-                Read-only. All reads go through this, regardless of
-                write_mode.
+            read_source: agent_id -> AgentState that all read() calls draw
+                from this step. Chosen by the executor based on
+                schedule.read_mode — the pre-step frozen snapshot under
+                "frozen" mode, or the live population under "live" mode.
+                This accessor has no opinion on which one it's given.
             live_population: agent_id -> AgentState, the population
-                currently being mutated this step (each agent's own
-                in-progress snapshot from S-02). Used for immediate writes.
+                currently being mutated this step. Used for immediate
+                writes, regardless of read_mode.
             deferred_writes: shared list that this accessor appends to
                 when write_mode is "deferred". The executor drains this
                 at step-end via apply_deferred_writes().
             write_mode: "deferred" or "immediate" — determines how write()
                 behaves. Set by the executor from this module's config
-                entry, not by the module itself.
+                entry, not by the module itself. Independent of read_mode.
         """
-        self._frozen_population = frozen_population
+        self._read_source = read_source
         self._live_population = live_population
         self._deferred_writes = deferred_writes
         self._write_mode = write_mode
 
     def read(self, neighbour_id: str, key: str) -> Any:
-        """Read an attribute from a neighbour's start-of-step (t-1) state.
+        """Read an attribute from a neighbour's state, via read_source.
 
-        Always reads from the frozen population snapshot, regardless of
-        write_mode — read behaviour is constant across all modules.
+        Which population read_source points to (frozen pre-step snapshot,
+        or live current-step state) is decided by the executor based on
+        schedule.read_mode — this method itself is agnostic to which.
 
         Args:
             neighbour_id: the neighbour's agent ID
             key: the attribute name to read
 
         Returns:
-            the attribute value as of the start of this step
+            the attribute value, as of whatever read_source represents
 
         Raises:
-            KeyError: if neighbour_id is not in the frozen population,
-                or if key is not a defined attribute for that agent
+            KeyError: if neighbour_id is not in read_source, or if key
+                is not a defined attribute for that agent
         """
-        if neighbour_id not in self._frozen_population:
+        if neighbour_id not in self._read_source:
             raise KeyError(
-                f"neighbour_id '{neighbour_id}' not found in frozen population."
+                f"neighbour_id '{neighbour_id}' not found in read source."
             )
-        return self._frozen_population[neighbour_id].get(key)
+        return self._read_source[neighbour_id].get(key)
 
     def write(self, neighbour_id: str, key: str, value: Any) -> None:
         """Write an attribute to a neighbour's state.
 
-        Behaviour depends on write_mode, set by the executor from config:
+        Behaviour depends on write_mode, set by the executor from config
+        (independent of read_mode):
           - "immediate": applied directly to live_population now.
           - "deferred": queued, applied only at step-end.
 

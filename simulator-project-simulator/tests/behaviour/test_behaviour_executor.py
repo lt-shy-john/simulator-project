@@ -5,6 +5,7 @@ from behaviour.base import BehaviourModule
 from behaviour.registry import register_behaviour
 from topology.topology import build_topologies
 from runner.soa import to_soa
+from scheduler.scheduler import compile_scheduling
 
 def test_compile_behaviours_success(sample_soa):
     config = {'behaviour': {'person': [{'expression': 'state["energy"] += 1', 'topology_name': 'sample_network'}]}, 'topologies': {'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}}}
@@ -52,12 +53,12 @@ def test_compile_behaviours_behaviour_settings_without_expression_module_throws_
 def test_run_step_expr_success(sample_agents_dict):
     config = {'behaviour': {'person': [{'expression': 'state["energy"] = 1', 'topology_name': 'sample_network'}]},
               'topologies': {
-                  'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}}}
+                  'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}}, 'scheduling': {'order': 'all_at_once', 'read_mode': 'frozen'}}
     pairs = build_topologies(config, to_soa([agent_state for agent_id, agent_state in sample_agents_dict.items()]))
-
     compiled = compile_behaviours(config, pairs)
+    schedule_config = compile_scheduling(config)
 
-    run_step(sample_agents_dict, compiled, pairs, None)
+    run_step(sample_agents_dict, compiled, pairs, None, schedule_config)
 
     for agents in sample_agents_dict.values():
         assert agents.state['energy'] == 1
@@ -70,12 +71,12 @@ def test_run_step_module_success(sample_agents_dict):
 
     config = {'behaviour': {'person': [{'module': 'testModule01', 'write_mode': 'deferred', 'topology_name': 'sample_network'}]},
               'topologies': {
-                  'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}}}
+                  'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}}, 'scheduling': {'order': 'all_at_once', 'read_mode': 'frozen'}}
     pairs = build_topologies(config, to_soa([agent_state for agent_id, agent_state in sample_agents_dict.items()]))
-
     compiled = compile_behaviours(config, pairs)
+    schedule_config = compile_scheduling(config)
 
-    run_step(sample_agents_dict, compiled, pairs, None)
+    run_step(sample_agents_dict, compiled, pairs, None, schedule_config)
 
     for agents in sample_agents_dict.values():
         assert agents.state['energy'] == 2
@@ -90,14 +91,15 @@ def test_run_step_self_write_visible_to_next_entry(sample_agents_dict):
         {'module': 'testIncrement', 'write_mode': 'deferred'},
         {'expression': 'state["energy"] += 10'},
     ]}, 'topologies': {
-        'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}}}
+        'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}}, 'scheduling': {'order': 'all_at_once', 'read_mode': 'frozen'}}
     pairs = build_topologies(config, to_soa(list(sample_agents_dict.values())))
     compiled = compile_behaviours(config, pairs)
+    schedule_config = compile_scheduling(config)
 
     agent = list(sample_agents_dict.values())[0]
     agent.state["energy"] = 5
 
-    run_step({agent.agent_id: agent}, compiled, pairs, None)
+    run_step({agent.agent_id: agent}, compiled, pairs, None, schedule_config)
 
     # If the expression saw the module's +1 first, result is (5+1)+10 = 16.
     # If it only saw the original value, result would be 5+10 = 15 (wrong).
@@ -113,11 +115,12 @@ def test_run_step_immediate_neighbour_write_applies_within_step(sample_agents_di
     config = {'behaviour': {'person': [
         {'module': 'testKill', 'write_mode': 'immediate', 'topology_name': 'sample_network'}
     ]}, 'topologies': {
-        'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}}}
+        'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}}, 'scheduling': {'order': 'all_at_once', 'read_mode': 'frozen'}}
     pairs = build_topologies(config, to_soa(list(sample_agents_dict.values())))
     compiled = compile_behaviours(config, pairs)
+    schedule_config = compile_scheduling(config)
 
-    run_step(sample_agents_dict, compiled, pairs, None)
+    run_step(sample_agents_dict, compiled, pairs, None, schedule_config)
 
     for agent in sample_agents_dict.values():
         assert agent.state["energy"] == 0
@@ -134,13 +137,14 @@ def test_run_step_module_with_params_success(sample_agents_dict):
     config = {'behaviour': {'person': [
         {'module': 'testIncrementByAmount', 'write_mode': 'deferred', 'params': {'amount': 7}}
     ]}, 'topologies': {
-        'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}}}
+        'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}}, 'scheduling': {'order': 'all_at_once', 'read_mode': 'frozen'}}
     pairs = build_topologies(config, to_soa(list(sample_agents_dict.values())))
     compiled = compile_behaviours(config, pairs)
+    schedule_config = compile_scheduling(config)
 
     agent = list(sample_agents_dict.values())[0]
     agent.state["energy"] = 10
 
-    run_step({agent.agent_id: agent}, compiled, pairs, None)
+    run_step({agent.agent_id: agent}, compiled, pairs, None, schedule_config)
 
     assert agent.state["energy"] == 17  # 10 + 7

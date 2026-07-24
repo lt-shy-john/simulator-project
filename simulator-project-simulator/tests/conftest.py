@@ -33,3 +33,9 @@ def sample_agents_dict():
     ids = [str(uuid.uuid4()) for _ in range(10)]
     return {id: AgentState(agent_id=id, agent_type_name='person',
                              state={'energy': random.randint(0, 10)}) for id in ids}
+
+@pytest.fixture
+def sample_agents_with_action_quota_dict():
+    ids = [str(uuid.uuid4()) for _ in range(10)]
+    return {id: AgentState(agent_id=id, agent_type_name='person',
+                             state={'energy': random.randint(0, 10), 'actions_remaining': 3}) for id in ids}

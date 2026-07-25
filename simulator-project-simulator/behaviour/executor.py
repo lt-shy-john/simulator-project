@@ -1,50 +1,37 @@
 """
-executor.py — Behaviour executor (S-05, updated for S-06 scheduling).
+executor.py — Behaviour executor (S-05/S-06, updated for S-07 Agent Lifecycle).
 
 Scope:
   - compile_behaviours: parses the 'behaviour' section of config ONCE at
     simulation start into ready-to-run CompiledEntry objects.
-  - run_step: executes one simulation step. UPDATED (S-06) — agent
-    processing order now comes from scheduling.resolve_step_agents()
-    instead of a fixed by-agent-type-then-population-order iteration,
-    and which population backs neighbour reads is chosen per
-    schedule.read_mode rather than always the frozen snapshot.
+  - run_step: executes one simulation step.
 
-Design notes (S-06 integration):
-  - read_mode ("frozen" | "live") determines which population dict is
-    passed as `read_source` to NeighbourAccessor, and which dict
-    expressions build their `neighbours_state` list from. Both modules
-    and expressions use the SAME read_source this step — read_mode is a
-    single, step-wide setting, not something that can differ between a
-    module and an expression in the same sequence (per researcher's
-    explicit intent: "anything surrounding it should be the same").
-      - "frozen": read_source = frozen_population (pre-step snapshot,
-        the original S-05 behaviour — unchanged in effect)
-      - "live": read_source = live_population (agents see same-step
-        mutations from whoever was processed earlier in this step's
-        order — enables cascades, order-dependent by design)
-  - Agent processing order now comes from
-    scheduling.resolve_step_agents(schedule, live_population), which
-    already applies quota (if any) and order (all_at_once / random /
-    priority). This REPLACES the old by-agent-type-then-population-order
-    grouping — order now matters semantically whenever read_mode is
-    "live" (it never mattered under "frozen", since nobody's reads
-    could be affected by processing order in that mode).
-  - consume_lifetime_action(schedule, agent) is called once per agent,
-    AFTER that agent's full behaviour sequence has executed for this
-    step — never before, and never inside resolve_step_agents itself
-    (which only checks eligibility, doesn't mutate quota state). See
-    scheduling.py for why this ordering matters.
-  - Neighbour cache (topology resolution) is still built once per step
-    from a frozen SoA snapshot, unchanged by S-06 — WHO your neighbours
-    are stays fixed at step start regardless of read_mode; only the
-    VALUES you read from them follow read_mode.
+Design notes (S-07 integration):
+  - `model` is now expected to be a persistent SimulationModel (see
+    model.py), built ONCE before the step loop starts — NOT rebuilt every
+    call to run_step. This matters for run-scoped fields like model.rng,
+    which must stay the same object across steps.
+  - run_step calls model._reset_for_step(step_number, live_population) at
+    the very start of each call — this updates step-scoped fields
+    (model.step, model.agents, and clears model._pending_events) without
+    touching run-scoped fields (model.rng, model.params).
+  - agent_types (agent_type_name -> AgentType) is now a REQUIRED
+    parameter — needed by apply_pending_lifecycle_events to look up
+    AttributeDefinitions when reproduce/external_entry fresh-sample
+    attributes.
+  - At step-end, after all agents have been processed and deferred
+    writes applied, apply_pending_lifecycle_events drains whatever
+    model.reproduce()/remove()/external_entry() calls were queued during
+    this step — same "process at step-end" pattern as deferred writes,
+    per the ticket's own note about avoiding mid-step list mutation bugs.
+  - step_number must be tracked by the CALLER (whatever runs the overall
+    simulation loop, incrementing once per call to run_step) and passed
+    in explicitly — run_step itself has no internal step counter.
 
 Not in scope here:
-  - Trigger / All quota modes beyond step_random_subset / lifetime_budget
-    (see scheduling.py) — these were the two settled for S-06.
-  - Agent lifecycle (birth/death) triggered by behaviour — S-07.
-  - model construction — run_step receives an already-built Model.
+  - The overall simulation loop that calls run_step repeatedly and
+    increments step_number — that's runner/simulation.py's job, not
+    covered here.
 """
 
 from __future__ import annotations
@@ -55,12 +42,14 @@ from typing import Any, Union
 from runner.state import AgentState
 from runner.soa import to_soa, ID_KEY
 from topology.topology import TopologyProtocol
+from agents.agents import AgentType
 from behaviour.base import BehaviourModule
-from behaviour.model import Model
+from behaviour.model import SimulationModel
 from behaviour.accessor import NeighbourAccessor, WriteMode, apply_deferred_writes
 from behaviour.expressions import evaluate_expression
 from behaviour.registry import get_behaviour
 from scheduler.scheduler import ScheduleConfig, resolve_step_agents, consume_lifetime_action
+from lifecycle.lifecycle import apply_pending_lifecycle_events
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +58,6 @@ from scheduler.scheduler import ScheduleConfig, resolve_step_agents, consume_lif
 
 @dataclass
 class CompiledModuleEntry:
-    """A behaviour config entry compiled into a ready-to-run module instance."""
     instance: BehaviourModule
     topology_name: str | None
     write_mode: WriteMode
@@ -77,11 +65,6 @@ class CompiledModuleEntry:
 
 @dataclass
 class CompiledExpressionEntry:
-    """A behaviour config entry compiled from an expression string.
-
-    topology_name is optional — only needed if the expression reads
-    neighbour state. Expressions can never write to neighbours, only read.
-    """
     expr: str
     topology_name: str | None
 
@@ -97,17 +80,6 @@ def compile_behaviours(
     config: dict,
     topologies: dict[str, TopologyProtocol],
 ) -> dict[str, list[CompiledEntry]]:
-    """Parse the 'behaviour' section of config into ready-to-run entries.
-
-    Called once at simulation start, not per step — module instances are
-    constructed here and reused for every subsequent call to run_step.
-
-    Raises:
-        ValueError: if the 'behaviour' section is missing or empty, if a
-            behaviour entry has neither 'module' nor 'expression', if
-            topology_name references an unknown topology, if write_mode
-            is invalid, or if a module name is not registered
-    """
     behaviour_config = config.get("behaviour", {})
     if not behaviour_config:
         raise ValueError(
@@ -174,13 +146,6 @@ def _build_neighbour_cache(
     topologies: dict[str, TopologyProtocol],
     soa,
 ) -> dict[str, dict[str, list[str]]]:
-    """Resolve every agent's neighbours for every topology, once per step.
-
-    Unchanged by S-06 — neighbour IDENTITY is always resolved from the
-    frozen pre-step SoA snapshot, regardless of read_mode. read_mode only
-    affects what VALUES you see once you have a neighbour's ID, not
-    whether they count as a neighbour this step.
-    """
     cache: dict[str, dict[str, list[str]]] = {}
 
     for topology_name, topology in topologies.items():
@@ -201,35 +166,32 @@ def run_step(
     live_population: dict[str, AgentState],
     compiled_behaviours: dict[str, list[CompiledEntry]],
     topologies: dict[str, TopologyProtocol],
-    model: Model,
+    model: SimulationModel,
     schedule: ScheduleConfig,
+    agent_types: dict[str, AgentType],
+    step_number: int,
 ) -> None:
     """Execute one simulation step, mutating live_population in place.
-
-    UPDATED (S-06): agent processing order comes from
-    scheduling.resolve_step_agents (quota + order applied), and neighbour
-    reads are sourced from either the frozen snapshot or the live
-    population depending on schedule.read_mode. Self-writes remain always
-    live regardless of read_mode (see base.py — this was never in question).
 
     Args:
         live_population: agent_id -> AgentState, the population being
             mutated this step
-        compiled_behaviours: output of compile_behaviours — ready-to-run
-            entries per agent type
+        compiled_behaviours: output of compile_behaviours
         topologies: named topologies from build_topologies (S-03)
-        model: simulation-level context object (see model.py)
+        model: a PERSISTENT SimulationModel — built once before the step
+            loop starts, reused (not rebuilt) across every call to
+            run_step. Reset for this step via model._reset_for_step at
+            the top of this function.
         schedule: compiled ScheduleConfig from scheduling.compile_scheduling
-
-    Notes:
-        Agents whose type has no entry in compiled_behaviours are
-        skipped (no behaviour configured for that type — not an error).
-        Agents excluded by quota from resolve_step_agents simply don't
-        appear in this step's processing at all.
+        agent_types: agent_type_name -> AgentType, needed for
+            reproduce/external_entry fresh-attribute sampling
+        step_number: the current step number, tracked and incremented by
+            the caller — run_step has no internal counter of its own
     """
-    # Frozen snapshot — always built, regardless of read_mode, since
-    # neighbour cache / topology resolution still needs a stable,
-    # pre-step view of who exists and what type they are.
+    # Reset step-scoped model state (step, agents, pending_events).
+    # Run-scoped state (rng, params) is untouched.
+    model._reset_for_step(step_number, live_population)
+
     frozen_population: dict[str, AgentState] = {
         agent_id: agent.snapshot() for agent_id, agent in live_population.items()
     }
@@ -237,23 +199,17 @@ def run_step(
     soa = to_soa(list(frozen_population.values()))
     neighbour_cache = _build_neighbour_cache(topologies, soa)
 
-    # Choose the read source for this step based on schedule.read_mode.
-    # Both modules (via NeighbourAccessor) and expressions (via
-    # neighbours_state) use this SAME source — read_mode is one setting
-    # for the whole step, not something that can differ per entry type.
     read_source = frozen_population if schedule.read_mode == "frozen" else live_population
 
     deferred_writes: list[tuple[str, str, Any]] = []
 
-    # Agent order now comes from scheduling — quota-filtered and ordered
-    # per schedule.order (all_at_once / random / priority).
     ordered_agent_ids = resolve_step_agents(schedule, live_population)
 
     for agent_id in ordered_agent_ids:
         agent = live_population[agent_id]
         entries = compiled_behaviours.get(agent.agent_type_name)
         if not entries:
-            continue  # no behaviour configured for this agent's type
+            continue
 
         for entry in entries:
             neighbours = (
@@ -277,9 +233,12 @@ def run_step(
                 ]
                 evaluate_expression(entry.expr, agent, neighbours_state)
 
-        # Lifetime quota is only spent once the agent has actually
-        # finished acting this step — never before (see scheduling.py).
         consume_lifetime_action(schedule, agent)
 
-    # Apply all deferred neighbour writes once every agent has been processed.
     apply_deferred_writes(live_population, deferred_writes)
+
+    # Lifecycle events (reproduce/remove/external_entry) queued via
+    # model.* calls during this step are applied last, after everything
+    # else — new agents this step never got a turn, removed agents'
+    # in-progress state changes are simply discarded.
+    apply_pending_lifecycle_events(live_population, model._pending_events, agent_types)

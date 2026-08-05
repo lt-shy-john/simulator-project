@@ -154,3 +154,116 @@ def test_run_step_module_with_params_success(sample_agents_dict, person_agent_ty
     run_step({agent.agent_id: agent}, compiled, pairs, model, schedule_config, person_agent_types,1)
 
     assert agent.state["energy"] == 17  # 10 + 7
+
+def test_run_step_reproduce_applies_after_step(sample_agents_dict, person_agent_types):
+    @register_behaviour("testReproduce")
+    class ReproduceModule(BehaviourModule):
+        def apply(self, agent, neighbours, accessor, model):
+            model.reproduce(agent_type=agent.agent_type_name, parent_id=agent.agent_id)
+
+    config = {
+        'behaviour': {'person': [
+            {'module': 'testReproduce', 'write_mode': 'immediate', 'topology_name': 'sample_network'}
+        ]},
+        'topologies': {'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}},
+        'scheduling': {'order': 'all_at_once', 'read_mode': 'frozen'}
+    }
+    pairs = build_topologies(config, to_soa(list(sample_agents_dict.values())))
+    compiled = compile_behaviours(config, pairs)
+    model = SimulationModel()
+    schedule_config = compile_scheduling(config)
+
+    original_count = len(sample_agents_dict)
+
+    run_step(sample_agents_dict, compiled, pairs, model, schedule_config, person_agent_types, 1)
+
+    # Every agent reproduced once this step -> population should double.
+    assert len(sample_agents_dict) == original_count * 2
+
+
+def test_run_step_remove_applies_after_step(sample_agents_dict, person_agent_types):
+    @register_behaviour("testRemove")
+    class RemoveModule(BehaviourModule):
+        def apply(self, agent, neighbours, accessor, model):
+            model.remove(agent.agent_id)
+
+    config = {
+        'behaviour': {'person': [
+            {'module': 'testRemove', 'write_mode': 'immediate', 'topology_name': 'sample_network'}
+        ]},
+        'topologies': {'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}},
+        'scheduling': {'order': 'all_at_once', 'read_mode': 'frozen'}
+    }
+    pairs = build_topologies(config, to_soa(list(sample_agents_dict.values())))
+    compiled = compile_behaviours(config, pairs)
+    model = SimulationModel()
+    schedule_config = compile_scheduling(config)
+
+    run_step(sample_agents_dict, compiled, pairs, model, schedule_config, person_agent_types, 1)
+
+    assert len(sample_agents_dict) == 0
+
+
+def test_run_step_external_entry_applies_after_step(sample_agents_dict, person_agent_types):
+    original_count = len(sample_agents_dict)
+
+    @register_behaviour("testExternalEntry")
+    class ExternalEntryModule(BehaviourModule):
+        def apply(self, agent, neighbours, accessor, model):
+            model.external_entry(agent_type=agent.agent_type_name, count=2)
+
+    config = {
+        'behaviour': {'person': [
+            {'module': 'testExternalEntry', 'write_mode': 'immediate', 'topology_name': 'sample_network'}
+        ]},
+        'topologies': {'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}},
+        'scheduling': {'order': 'all_at_once', 'read_mode': 'frozen'}
+    }
+    pairs = build_topologies(config, to_soa(list(sample_agents_dict.values())))
+    compiled = compile_behaviours(config, pairs)
+    model = SimulationModel()
+    schedule_config = compile_scheduling(config)
+
+    run_step(sample_agents_dict, compiled, pairs, model, schedule_config, person_agent_types, 1)
+
+    # Every original agent triggers +2 new agents this step.
+    assert len(sample_agents_dict) == original_count * 3
+
+
+def test_run_step_pending_events_do_not_leak_into_next_step(sample_agents_dict, person_agent_types):
+    """Proves _reset_for_step actually clears _pending_events — a module
+    firing once should not have its event silently re-applied on a
+    later step."""
+    call_count = {"n": 0}
+
+    @register_behaviour("testRemoveOnce")
+    class RemoveOnceModule(BehaviourModule):
+        def apply(self, agent, neighbours, accessor, model):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                model.remove(agent.agent_id)
+
+    config = {
+        'behaviour': {'person': [
+            {'module': 'testRemoveOnce', 'write_mode': 'immediate', 'topology_name': 'sample_network'}
+        ]},
+        'topologies': {'sample_network': {'mode': 'all_pairs', 'agent_types': ['person'], 'allow_self_interaction': True}},
+        'scheduling': {'order': 'all_at_once', 'read_mode': 'frozen'}
+    }
+    pairs = build_topologies(config, to_soa(list(sample_agents_dict.values())))
+    compiled = compile_behaviours(config, pairs)
+    model = SimulationModel()
+    schedule_config = compile_scheduling(config)
+
+    original_count = len(sample_agents_dict)
+
+    run_step(sample_agents_dict, compiled, pairs, model, schedule_config, person_agent_types, 1)
+    assert len(sample_agents_dict) == original_count - 1
+
+    count_after_step_1 = len(sample_agents_dict)
+    run_step(sample_agents_dict, compiled, pairs, model, schedule_config, person_agent_types, 2)
+
+    # Step 2's surviving agents don't call model.remove again (call_count > 1
+    # branch does nothing) -> population must be unchanged, proving no
+    # leftover event from step 1 re-applied.
+    assert len(sample_agents_dict) == count_after_step_1

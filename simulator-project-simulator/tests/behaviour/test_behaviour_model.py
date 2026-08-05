@@ -18,6 +18,15 @@ class ValidModule:
     def log_event(self, name, agent_id, data):
         pass
 
+    def reproduce(self, agent_type, parent_id, fresh_attributes):
+        pass
+
+    def remove(self, agent_id):
+        pass
+
+    def external_entry(self, agent_type, count):
+        pass
+
 class PartialModule:
     """Only implements one of the methods from the Protocol shape."""
     def log_event(self, name, agent_id, data):

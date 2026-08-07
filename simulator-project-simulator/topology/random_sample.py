@@ -54,11 +54,12 @@ class RandomSampleTopology:
     """
 
     def __init__(
-        self,
-        k: int | None = None,
-        proportion: float | None = None,
-        seed: int | None = None,
-        agent_types: list[str] | None = None,
+            self,
+            k: int | None = None,
+            proportion: float | None = None,
+            seed: int | None = None,
+            rng: np.random.Generator | None = None,
+            agent_types: list[str] | None = None,
     ):
         """
         Args:
@@ -67,6 +68,7 @@ class RandomSampleTopology:
             proportion: fraction of eligible population to sample (0.0–1.0).
                 Mutually exclusive with k.
             seed: random seed for this topology instance. Optional.
+            rng: random seed taken from config. Optional
             agent_types: if set, only agents of these types are eligible
                 as neighbours. If None, all types are included.
 
@@ -86,7 +88,8 @@ class RandomSampleTopology:
         self.k = k
         self.proportion = proportion
         self.agent_types = agent_types
-        self.rng = np.random.default_rng(seed)
+        self.seed = seed  # NEW — retained for to_config()
+        self.rng = rng if rng is not None else np.random.default_rng(seed)
 
     @classmethod
     def from_config(cls, config: dict, soa: SoAPopulation) -> "RandomSampleTopology":

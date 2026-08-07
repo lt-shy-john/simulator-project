@@ -56,20 +56,18 @@ class NetworkTopology:
     see S-03b.
     """
 
-    def __init__(
-        self,
-        graph: nx.Graph,
-        agent_types: list[str] | None = None,
-    ):
+    def __init__(self, graph: nx.Graph, agent_types: list[str] | None = None, _source_config: dict | None = None):
         """
         Args:
             graph: a NetworkX Graph with UUID string node labels matching
                    agent IDs in the SoAPopulation
             agent_types: if set, only neighbours of these types are returned.
                          If None, all types are included.
+            _source_config: config dict for this topology instance
         """
         self.graph = graph
         self.agent_types = agent_types
+        self._source_config = _source_config  # retained verbatim for to_config()
 
     @classmethod
     def from_config(cls, config: dict, soa: SoAPopulation) -> "NetworkTopology":

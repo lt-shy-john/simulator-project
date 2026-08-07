@@ -46,6 +46,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 from typing import Literal
+import numpy as np
 
 from runner.state import AgentState
 
@@ -240,7 +241,8 @@ def consume_lifetime_action(schedule: ScheduleConfig, agent: AgentState) -> None
 
 def resolve_step_agents(
     schedule: ScheduleConfig,
-    population: dict[str, AgentState],
+    live_population: dict[str, AgentState],
+    rng: np.random.Generator,   # NEW — required, no default of None/global
 ) -> list[str]:
     """Return the ordered list of agent IDs that should act this step,
     after applying quota and ordering.
@@ -252,7 +254,7 @@ def resolve_step_agents(
         shuffled among themselves, not given a deterministic secondary
         sort.
     """
-    eligible_ids = _apply_quota(schedule, population)
+    eligible_ids = _apply_quota(schedule, live_population)
 
     if schedule.order == "all_at_once":
         return eligible_ids

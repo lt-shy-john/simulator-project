@@ -61,6 +61,8 @@ from stopping.engine import check_stopping, StopResult, StoppingConfig
 @dataclass
 class CompiledModuleEntry:
     instance: BehaviourModule
+    module_name: str
+    params: dict[str, Any]
     topology_name: str | None
     write_mode: WriteMode
 
@@ -119,6 +121,8 @@ def compile_behaviours(
 
                 compiled_entries.append(CompiledModuleEntry(
                     instance=instance,
+                    module_name=module_name,
+                    params=params,
                     topology_name=topology_name,
                     write_mode=write_mode,
                 ))

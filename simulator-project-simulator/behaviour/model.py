@@ -163,11 +163,11 @@ class SimulationModel:
     without needing to change this class's public interface.
     """
 
-    def __init__(self, params: dict[str, Any] | None = None, seed: int | None = None):
+    def __init__(self, params: dict[str, Any] | None = None, seed: int | None = None, rng: np.random.Generator | None = None):
         self.step: int = 0
         self.agents: list[AgentState] = []
         self.params: dict[str, Any] = params or {}
-        self.rng: np.random.Generator = np.random.default_rng(seed)
+        self.rng: np.random.Generator = rng if rng is not None else np.random.default_rng(seed)
 
         # Step-scoped — reset every step via _reset_for_step, never
         # persists across steps.

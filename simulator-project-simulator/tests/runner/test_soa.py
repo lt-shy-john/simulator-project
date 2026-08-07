@@ -19,7 +19,7 @@ def test_to_soa_success():
     )
     count = 10
     person01 = AgentType(name="person", count=count, generation_mode=GenerationMode.HOMOGENEOUS, attributes=[agent_state])
-    population = initialise_population(person01)
+    population = initialise_population(person01, np.random.default_rng(0))
 
     result = to_soa(population)
     assert np.max(result['person']['state1']) <= high
@@ -39,7 +39,7 @@ def test_from_soa_success():
     count = 10
     person01 = AgentType(name="person", count=count, generation_mode=GenerationMode.HOMOGENEOUS,
                          attributes=[agent_state])
-    population = initialise_population(person01)
+    population = initialise_population(person01, np.random.default_rng(0))
     result = to_soa(population)
 
     result = from_soa(result)
@@ -61,7 +61,7 @@ def test_soa_add_agent_success():
     count = 10
     person01 = AgentType(name="person", count=count, generation_mode=GenerationMode.HOMOGENEOUS,
                          attributes=[agent_state])
-    population = initialise_population(person01)
+    population = initialise_population(person01, np.random.default_rng(0))
     population_array = to_soa(population)
 
     new_agent = AgentState(
@@ -87,7 +87,7 @@ def test_soa_remove_agent_success():
     count = 10
     person01 = AgentType(name="person", count=count, generation_mode=GenerationMode.HOMOGENEOUS,
                          attributes=[agent_state])
-    population = initialise_population(person01)
+    population = initialise_population(person01, np.random.default_rng(0))
     population_array = to_soa(population)
 
     result = remove_agent(population_array, population[0].agent_id)
@@ -104,7 +104,7 @@ def test_soa_remove_last_agent_removes_type_entry():
     count = 1
     person01 = AgentType(name="person", count=count, generation_mode=GenerationMode.HOMOGENEOUS,
                          attributes=[agent_state])
-    population = initialise_population(person01)
+    population = initialise_population(person01, np.random.default_rng(0))
     population_array = to_soa(population)
 
     result = remove_agent(population_array, population[0].agent_id)
@@ -121,7 +121,7 @@ def test_soa_remove_inexistent_agent_throws_exception():
     count = 1
     person01 = AgentType(name="person", count=count, generation_mode=GenerationMode.HOMOGENEOUS,
                          attributes=[agent_state])
-    population = initialise_population(person01)
+    population = initialise_population(person01, np.random.default_rng(0))
     population_array = to_soa(population)
 
     remove_agent(population_array, population[0].agent_id)

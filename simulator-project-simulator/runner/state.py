@@ -147,7 +147,7 @@ def initialise_population(agent_type: AgentType, rng: np.random.Generator) -> li
 
     for attr in agent_type.attributes:
         if attr.distribution is not None:
-            attribute_arrays[attr.name] = _sample_distribution(attr, count)
+            attribute_arrays[attr.name] = _sample_distribution(attr, count, rng)
         else:
             # No distribution defined — initialise to None for now.
             # This covers schema-only heterogeneous attributes awaiting bulk import.

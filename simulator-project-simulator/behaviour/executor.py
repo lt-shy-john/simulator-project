@@ -212,7 +212,7 @@ def run_step(
 
     deferred_writes: list[tuple[str, str, Any]] = []
 
-    ordered_agent_ids = resolve_step_agents(schedule, live_population)
+    ordered_agent_ids = resolve_step_agents(schedule, live_population, model.rng)
 
     for agent_id in ordered_agent_ids:
         agent = live_population[agent_id]
@@ -250,6 +250,6 @@ def run_step(
     # model.* calls during this step are applied last, after everything
     # else — new agents this step never got a turn, removed agents'
     # in-progress state changes are simply discarded.
-    apply_pending_lifecycle_events(live_population, model._pending_events, agent_types)
+    apply_pending_lifecycle_events(live_population, model._pending_events, agent_types, model.rng)
 
     return check_stopping(model, stopping_config)

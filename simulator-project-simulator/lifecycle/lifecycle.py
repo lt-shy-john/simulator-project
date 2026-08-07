@@ -57,6 +57,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
+
 from runner.state import AgentState, _sample_distribution
 from agents.agents import AgentType
 
@@ -102,6 +104,7 @@ def apply_pending_lifecycle_events(
     live_population: dict[str, AgentState],
     pending_events: list[LifecycleEvent],
     agent_types: dict[str, AgentType],
+    rng: np.random.Generator,
 ) -> None:
     """Drain the pending lifecycle event queue, mutating live_population
     in place. Called once by the executor after all agents have been
@@ -122,6 +125,10 @@ def apply_pending_lifecycle_events(
         agent_types: agent_type_name -> AgentType, needed to look up
             AttributeDefinitions for fresh-sampling (reproduce's fresh
             attributes, and all of external_entry's attributes)
+        rng: shared seeded generator (typically model.rng) used for all
+            fresh-attribute sampling in this call — same generator the
+            rest of the simulation draws from, so reproduce()/
+            external_entry() stay reproducible under a fixed seed.
 
     Raises:
         KeyError: if a ReproduceEvent's parent_id is not found in
@@ -129,11 +136,11 @@ def apply_pending_lifecycle_events(
     """
     for event in pending_events:
         if isinstance(event, ReproduceEvent):
-            _apply_reproduce(event, live_population, agent_types)
+            _apply_reproduce(event, live_population, agent_types, rng)
         elif isinstance(event, RemoveEvent):
             live_population.pop(event.agent_id, None)  # no-op if already gone
         elif isinstance(event, ExternalEntryEvent):
-            _apply_external_entry(event, live_population, agent_types)
+            _apply_external_entry(event, live_population, agent_types, rng)
         else:
             raise ValueError(f"Unknown lifecycle event type: {type(event)}")
 
@@ -142,6 +149,7 @@ def _apply_reproduce(
     event: ReproduceEvent,
     live_population: dict[str, AgentState],
     agent_types: dict[str, AgentType],
+    rng: np.random.Generator,
 ) -> None:
     """Create a new agent from a ReproduceEvent, inheriting or freshly
     sampling each attribute per event.fresh_attributes."""
@@ -163,7 +171,7 @@ def _apply_reproduce(
     for attr in agent_type_def.attributes:
         if attr.name in event.fresh_attributes and attr.distribution is not None:
             # Fresh sample — same distribution logic as initial population.
-            sampled_array = _sample_distribution(attr, count=1)
+            sampled_array = _sample_distribution(attr, count=1, rng=rng)
             value = sampled_array[0]
             child_state[attr.name] = value.item() if hasattr(value, "item") else value
         else:
@@ -182,6 +190,7 @@ def _apply_external_entry(
     event: ExternalEntryEvent,
     live_population: dict[str, AgentState],
     agent_types: dict[str, AgentType],
+    rng: np.random.Generator,
 ) -> None:
     """Add `count` freshly-sampled new agents of the given type. No
     parent — every attribute is sampled fresh, same as initial population
@@ -198,7 +207,7 @@ def _apply_external_entry(
         new_state: dict[str, Any] = {}
         for attr in agent_type_def.attributes:
             if attr.distribution is not None:
-                sampled_array = _sample_distribution(attr, count=1)
+                sampled_array = _sample_distribution(attr, count=1, rng=rng)
                 value = sampled_array[0]
                 new_state[attr.name] = value.item() if hasattr(value, "item") else value
             else:

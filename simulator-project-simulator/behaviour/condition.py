@@ -1,5 +1,5 @@
 """
-condition.py — Bare boolean condition evaluation for Model.count/mean (S-07).
+expression.py — Bare boolean condition evaluation for Model.count/mean (S-07).
 
 Scope:
   - _evaluate_condition: evaluates a bare expression (e.g.

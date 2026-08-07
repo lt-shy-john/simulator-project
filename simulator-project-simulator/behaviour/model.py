@@ -198,6 +198,13 @@ class SimulationModel:
             raise ValueError(f"mean(): no agents match filter_expr {filter_expr!r}")
         return sum(a.get(attr) for a in matching) / len(matching)
 
+    def sum(self, attr: str, filter_expr: str | None = None) -> float:
+        matching = self.agents
+        if filter_expr is not None:
+            from behaviour.condition import _evaluate_condition
+            matching = [a for a in self.agents if _evaluate_condition(filter_expr, a)]
+        return sum(a.get(attr) for a in matching)
+
     def log_event(self, name: str, agent_id: str, data: dict[str, Any] | None = None) -> None:
         # Stub — S-10 replaces this with real persistence.
         self._event_log.append({"name": name, "agent_id": agent_id, "data": data, "step": self.step})

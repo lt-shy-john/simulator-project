@@ -38,6 +38,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Union
+import sys
 
 from runner.state import AgentState
 from runner.soa import to_soa, ID_KEY
@@ -50,6 +51,7 @@ from behaviour.expressions import evaluate_expression
 from behaviour.registry import get_behaviour
 from scheduler.scheduler import ScheduleConfig, resolve_step_agents, consume_lifetime_action
 from lifecycle.lifecycle import apply_pending_lifecycle_events
+from stopping.engine import check_stopping, StopResult, StoppingConfig
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +164,8 @@ def _build_neighbour_cache(
 # Step execution
 # ---------------------------------------------------------------------------
 
+_DEFAULT_STOPPING_CONFIG = StoppingConfig(max_steps=sys.maxsize)
+
 def run_step(
     live_population: dict[str, AgentState],
     compiled_behaviours: dict[str, list[CompiledEntry]],
@@ -170,7 +174,8 @@ def run_step(
     schedule: ScheduleConfig,
     agent_types: dict[str, AgentType],
     step_number: int,
-) -> None:
+    stopping_config: StoppingConfig = _DEFAULT_STOPPING_CONFIG,
+) -> StopResult:
     """Execute one simulation step, mutating live_population in place.
 
     Args:
@@ -242,3 +247,5 @@ def run_step(
     # else — new agents this step never got a turn, removed agents'
     # in-progress state changes are simply discarded.
     apply_pending_lifecycle_events(live_population, model._pending_events, agent_types)
+
+    return check_stopping(model, stopping_config)

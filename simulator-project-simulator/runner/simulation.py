@@ -140,8 +140,16 @@ class Simulation():
         dumped = cfg.model_dump()
 
         topologies = build_topologies(dumped, soa, rng=rng)
-        compiled_behaviours = compile_behaviours(dumped, topologies)
-        schedule = compile_scheduling(dumped)
+        # compile_behaviours expects the config key "behaviour" (singular) —
+        # a pre-existing convention from S-06, already relied on by its own
+        # test suite. SimulationConfig uses "behaviours" (plural) for
+        # consistency with topologies/agent_types. Adapt here rather than
+        # changing either already-settled name.
+        compiled_behaviours = compile_behaviours({**dumped, "behaviour": dumped["behaviours"]}, topologies)
+        # Same key-naming mismatch as above — compile_scheduling expects
+        # "scheduling" (a pre-existing S-06 convention), SimulationConfig
+        #  uses "scheduler".
+        schedule = compile_scheduling({**dumped, "scheduling": dumped["scheduler"]})
         model = SimulationModel(params={}, rng=rng)
 
         sim = cls(

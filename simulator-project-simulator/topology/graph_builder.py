@@ -76,6 +76,38 @@ _FILE_READERS = {
 # Public API
 # ---------------------------------------------------------------------------
 
+def graph_to_config(graph: nx.Graph, source_config: dict) -> dict:
+    """Produce a self-contained, round-trippable config dict for a graph.
+
+    For generated graphs (source_config contains 'type'), returns
+    source_config verbatim — the generation params + seed are fully
+    self-contained and reproducible.
+
+    For bring-your-own graphs (source_config contains 'source'), the
+    file path is NOT echoed back — that would be fragile (file can move,
+    change, or not exist for whoever receives the config). Instead, the
+    loaded graph is serialized to a node-link data dict that can be
+    reconstructed via nx.node_link_graph without any file dependency.
+
+    This ensures Simulation.to_config() always emits a config that
+    feeds back into Simulation.from_config() without any external
+    file references (same rule as CSV/bulk_upload on the agents side).
+
+    Args:
+        graph: the live NetworkX graph held by a NetworkTopology instance
+        source_config: the raw 'graph' dict that was used to build it
+
+    Returns:
+        A self-contained dict suitable for storing as the 'graph' section
+        of a NetworkTopologyConfig, and for feeding back into build_graph().
+    """
+    if "source" in source_config:
+        # Replace the file-path reference with literal node-link data.
+        # build_graph() already handles this shape via the 'node_link' type.
+        return {"type": "node_link", "data": nx.node_link_data(graph)}
+    # Generated graph — params + seed are already self-contained.
+    return source_config
+
 def build_graph(config: dict, soa: SoAPopulation) -> nx.Graph:
     """Build or load a NetworkX graph from config.
 
@@ -132,6 +164,12 @@ def _generate_graph(config: dict, soa: SoAPopulation) -> nx.Graph:
 
     # Collect all agent IDs from SoA in order — used for node relabelling.
     agent_ids = _collect_agent_ids(soa)
+
+    if graph_type == "node_link":
+        # Literal serialized graph — produced by graph_to_config() for
+        # bring-your-own graphs. Reconstruct directly, no relabelling
+        # needed since node IDs are already UUID strings from the original.
+        return nx.node_link_graph(config["data"])
 
     if graph_type == "erdos_renyi":
         n = _require(config, "n", graph_type)

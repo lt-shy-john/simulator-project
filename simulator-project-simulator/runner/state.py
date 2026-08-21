@@ -20,7 +20,7 @@ from agents.models import AttributeType, PopulationMethod
 # Distribution sampling
 # ---------------------------------------------------------------------------
 
-def _sample_distribution(attr: AttributeDefinition, count: int) -> np.ndarray:
+def _sample_distribution(attr: AttributeDefinition, count: int, rng: np.random.Generator) -> np.ndarray:
     """Sample `count` values from the distribution defined on `attr`.
 
     Returns a NumPy array of length `count`. The dtype is inferred from the
@@ -35,12 +35,11 @@ def _sample_distribution(attr: AttributeDefinition, count: int) -> np.ndarray:
 
     if isinstance(dist, UniformDistribution):
         if attr.type == AttributeType.INT:
-            # randint is exclusive of high, so +1 to make it inclusive.
-            return np.random.randint(int(dist.low), int(dist.high) + 1, size=count)
-        return np.random.uniform(dist.low, dist.high, size=count)
+            return rng.integers(int(dist.low), int(dist.high) + 1, size=count)  # note: integers, not randint
+        return rng.uniform(dist.low, dist.high, size=count)
 
     if isinstance(dist, NormalDistribution):
-        samples = np.random.normal(dist.mean, dist.stddev, size=count)
+        samples = rng.normal(dist.mean, dist.stddev, size=count)
         if attr.type == AttributeType.INT:
             return np.round(samples).astype(int)
         return samples
@@ -49,13 +48,13 @@ def _sample_distribution(attr: AttributeDefinition, count: int) -> np.ndarray:
         categories = list(dist.weights.keys())
         total = sum(dist.weights.values())
         probabilities = [w / total for w in dist.weights.values()]
-        return np.random.choice(categories, size=count, p=probabilities)
+        return rng.choice(categories, size=count, p=probabilities)
 
     if isinstance(dist, BinomialDistribution):
-        return np.random.binomial(dist.n, dist.p, size=count)
+        return rng.binomial(dist.n, dist.p, size=count)
 
     if isinstance(dist, PoissonDistribution):
-        return np.random.poisson(dist.lam, size=count)
+        return rng.poisson(dist.lam, size=count)
 
     raise ValueError(
         f"attribute '{attr.name}': unsupported distribution type '{type(dist).__name__}'"
@@ -130,7 +129,7 @@ class AgentState(BaseModel):
 # Population initialisation
 # ---------------------------------------------------------------------------
 
-def initialise_population(agent_type: AgentType) -> list[AgentState]:
+def initialise_population(agent_type: AgentType, rng: np.random.Generator) -> list[AgentState]:
     """Initialise a population of AgentState instances from an AgentType blueprint.
 
     Samples attribute values using NumPy (one array per attribute, not per
@@ -148,7 +147,7 @@ def initialise_population(agent_type: AgentType) -> list[AgentState]:
 
     for attr in agent_type.attributes:
         if attr.distribution is not None:
-            attribute_arrays[attr.name] = _sample_distribution(attr, count)
+            attribute_arrays[attr.name] = _sample_distribution(attr, count, rng)
         else:
             # No distribution defined — initialise to None for now.
             # This covers schema-only heterogeneous attributes awaiting bulk import.

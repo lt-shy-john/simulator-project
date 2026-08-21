@@ -61,7 +61,7 @@ def test_sample_normal_distribution_returns_correct_count():
     distro = NormalDistribution(mean=0, stddev=1)
     attr_def01 = AttributeDefinition(name='attr01', type=AttributeType.FLOAT, population_method=PopulationMethod.DISTRIBUTION, distribution=distro)
     count = 100
-    result = _sample_distribution(attr_def01, count)
+    result = _sample_distribution(attr_def01, count, np.random.default_rng(0))
     assert len(result) == count
     assert isinstance(result, np.ndarray)
     assert -0.5 < result.mean() < 0.5
@@ -72,7 +72,7 @@ def test_sample_uniform_distribution_within_bounds():
                                      population_method=PopulationMethod.DISTRIBUTION,
                                      distribution=distro)
     count = 100
-    result = _sample_distribution(attr_def01, count)
+    result = _sample_distribution(attr_def01, count, np.random.default_rng(0))
     assert len(result) == count
     assert isinstance(result, np.ndarray)
     for data in result:
@@ -84,7 +84,7 @@ def test_sample_fixed_distribution_all_same_value():
                                      population_method=PopulationMethod.DISTRIBUTION,
                                      distribution=distro)
     count = 100
-    result = _sample_distribution(attr_def01, count)
+    result = _sample_distribution(attr_def01, count, np.random.default_rng(0))
     assert len(result) == count
     assert isinstance(result, np.ndarray)
     for data in result:
@@ -110,7 +110,7 @@ def test_initialise_population_success():
     person01 = AgentType(name="person", count=count, generation_mode=GenerationMode.HOMOGENEOUS)
     agent_state = AgentState(agent_id=str(uuid.uuid4()), agent_type_name='person', state={'state1': 1})
 
-    result = initialise_population(person01)
+    result = initialise_population(person01, np.random.default_rng(0))
 
     assert len(result) == count
     for person in result:
@@ -126,7 +126,7 @@ def test_snapshot_update_success():
     )
     count = 10
     person01 = AgentType(name="person", count=count, generation_mode=GenerationMode.HOMOGENEOUS, attributes=[energy])
-    population = initialise_population(person01)
+    population = initialise_population(person01, np.random.default_rng(0))
 
     # Take snapshots and modify one
     snapshots = [agent.snapshot() for agent in population]

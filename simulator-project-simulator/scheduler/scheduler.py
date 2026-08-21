@@ -43,9 +43,10 @@ Not in scope here:
 
 from __future__ import annotations
 
-import random
+import numpy as np
 from dataclasses import dataclass
 from typing import Literal
+import numpy as np
 
 from runner.state import AgentState
 
@@ -160,6 +161,7 @@ def compile_scheduling(config: dict) -> ScheduleConfig:
 def _apply_quota(
     schedule: ScheduleConfig,
     population: dict[str, AgentState],
+    rng: np.random.Generator,
 ) -> list[str]:
     """Return the list of agent IDs eligible to act this step, after
     applying quota (if any).
@@ -176,6 +178,12 @@ def _apply_quota(
         state["actions_remaining"] > 0 (or undefined, treated as
         unlimited). Does NOT decrement here — see consume_lifetime_action,
         called only after an agent's behaviour sequence has actually run.
+
+    Args:
+        rng: seeded generator (forwarded from resolve_step_agents) used
+            for step_random_subset sampling — same generator the rest of
+            the simulation draws from, so quota sampling stays
+            reproducible under a fixed seed.
     """
     if schedule.quota is None:
         return list(population.keys())
@@ -198,7 +206,9 @@ def _apply_quota(
         ]
 
     if quota.mode == "step_random_subset":
-        chosen = random.sample(scoped_ids, min(quota.limit, len(scoped_ids)))
+        sample_size = min(quota.limit, len(scoped_ids))
+        chosen_idx = rng.choice(len(scoped_ids), size=sample_size, replace=False)
+        chosen = [scoped_ids[i] for i in chosen_idx]
         return other_ids + chosen
 
     else:  # lifetime_budget
@@ -240,7 +250,8 @@ def consume_lifetime_action(schedule: ScheduleConfig, agent: AgentState) -> None
 
 def resolve_step_agents(
     schedule: ScheduleConfig,
-    population: dict[str, AgentState],
+    live_population: dict[str, AgentState],
+    rng: np.random.Generator,   # NEW — required, no default of None/global
 ) -> list[str]:
     """Return the ordered list of agent IDs that should act this step,
     after applying quota and ordering.
@@ -252,26 +263,26 @@ def resolve_step_agents(
         shuffled among themselves, not given a deterministic secondary
         sort.
     """
-    eligible_ids = _apply_quota(schedule, population)
+    eligible_ids = _apply_quota(schedule, live_population, rng)
 
     if schedule.order == "all_at_once":
         return eligible_ids
 
     elif schedule.order == "random":
         shuffled = eligible_ids.copy()
-        random.shuffle(shuffled)
+        rng.shuffle(shuffled)
         return shuffled
 
     else:  # priority
         by_priority: dict[float, list[str]] = {}
         for aid in eligible_ids:
-            value = population[aid].state.get(schedule.priority_attribute, 0)
+            value = live_population[aid].state.get(schedule.priority_attribute, 0)
             by_priority.setdefault(value, []).append(aid)
 
         ordered: list[str] = []
         for value in sorted(by_priority.keys(), reverse=True):
             group = by_priority[value]
-            random.shuffle(group)
+            rng.shuffle(group)
             ordered.extend(group)
 
         return ordered

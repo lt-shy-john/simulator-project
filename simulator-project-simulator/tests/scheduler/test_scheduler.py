@@ -1,6 +1,8 @@
 import pytest
 import random
 
+import numpy as np
+
 from scheduler.scheduler import compile_scheduling, resolve_step_agents, consume_lifetime_action
 
 def test_scheduler_all_success():
@@ -33,7 +35,7 @@ def test_resolve_step_agents_all_success(sample_agents_with_action_quota_dict):
     config = {'scheduling': {'order': 'all_at_once', 'read_mode': 'frozen'}}
     schedule_config = compile_scheduling(config)
 
-    schedule_result = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict)
+    schedule_result = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict, np.random.default_rng(0))
 
     assert len(schedule_result) == len(sample_agents_with_action_quota_dict)
 
@@ -41,7 +43,7 @@ def test_resolve_step_agents_random_order_success(sample_agents_with_action_quot
     config = {'scheduling': {'order': 'random', 'read_mode': 'live'}}
     schedule_config = compile_scheduling(config)
 
-    schedule_result = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict)
+    schedule_result = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict, np.random.default_rng(0))
 
     assert len(schedule_result) == len(sample_agents_with_action_quota_dict)
     assert set(schedule_result) == set(sample_agents_with_action_quota_dict.keys())
@@ -55,7 +57,7 @@ def test_resolve_step_agents_priority_mode_success(sample_agents_with_action_quo
     target_agent.state['actions_remaining'] = 1  # one action left
 
     # Should be eligible this step (budget = 1)
-    result_before = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict)
+    result_before = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict, np.random.default_rng(0))
     assert target_agent.agent_id in result_before
 
     # Simulate the agent actually acting and its budget being consumed
@@ -63,7 +65,7 @@ def test_resolve_step_agents_priority_mode_success(sample_agents_with_action_quo
     assert target_agent.state['actions_remaining'] == 0
 
     # Now should be ineligible on the next resolution
-    result_after = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict)
+    result_after = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict, np.random.default_rng(0))
     assert target_agent.agent_id not in result_after
 
 def test_resolve_step_agents_step_random_subset_caps_at_limit(sample_agents_with_action_quota_dict):
@@ -71,7 +73,7 @@ def test_resolve_step_agents_step_random_subset_caps_at_limit(sample_agents_with
                              'quota': {'mode': 'step_random_subset', 'limit': 3, 'scope': 'person'}}}
     schedule_config = compile_scheduling(config)
 
-    schedule_result = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict)
+    schedule_result = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict, np.random.default_rng(0))
 
     assert len(schedule_result) == 3
 
@@ -79,7 +81,7 @@ def test_consume_lifetime_action_success(sample_agents_with_action_quota_dict):
     config = {'scheduling': {'order': 'priority', 'read_mode': 'live', 'priority_attribute': 'energy', 'quota': {'mode': 'lifetime_budget', 'limit': 3, 'scope': 'person'}}}
     sample_agent = random.choice(list(sample_agents_with_action_quota_dict.values()))
     schedule_config = compile_scheduling(config)
-    schedule_result = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict)
+    schedule_result = resolve_step_agents(schedule_config, sample_agents_with_action_quota_dict, np.random.default_rng(0))
 
     consume_lifetime_action(schedule_config, sample_agent)
 

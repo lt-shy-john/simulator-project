@@ -40,9 +40,10 @@ Config shape:
 from __future__ import annotations
 
 import networkx as nx
+import numpy as np
 
 from runner.soa import SoAPopulation, ID_KEY
-from topology.graph_builder import build_graph
+from topology.graph_builder import build_graph, graph_to_config
 from topology.topology import validate_agent_types
 
 
@@ -56,23 +57,21 @@ class NetworkTopology:
     see S-03b.
     """
 
-    def __init__(
-        self,
-        graph: nx.Graph,
-        agent_types: list[str] | None = None,
-    ):
+    def __init__(self, graph: nx.Graph, agent_types: list[str] | None = None, _source_config: dict | None = None):
         """
         Args:
             graph: a NetworkX Graph with UUID string node labels matching
                    agent IDs in the SoAPopulation
             agent_types: if set, only neighbours of these types are returned.
                          If None, all types are included.
+            _source_config: config dict for this topology instance
         """
         self.graph = graph
         self.agent_types = agent_types
+        self._source_config = _source_config  # retained verbatim for to_config()
 
     @classmethod
-    def from_config(cls, config: dict, soa: SoAPopulation) -> "NetworkTopology":
+    def from_config(cls, config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None) -> "NetworkTopology":
         """Construct from a topology config section.
 
         Builds or loads the graph via graph_builder, then constructs
@@ -92,6 +91,12 @@ class NetworkTopology:
                 }
             soa: the current SoAPopulation, needed by graph_builder for
                  node relabelling and validation
+            rng: shared seeded generator (typically from Simulation.from_config).
+                 When provided, takes priority over this topology's own
+                 config-level 'seed' — this is how a single simulation-wide
+                 seed flows into every topology consistently. If omitted,
+                 falls back to a generator built from config['seed'], for
+                 topology-only reproducibility when used standalone.
 
         Raises:
             ValueError: if 'graph' section is missing from config, or if
@@ -105,11 +110,18 @@ class NetworkTopology:
         agent_types = config.get("agent_types", None)
         validate_agent_types(agent_types, soa)
 
-        graph = build_graph(config["graph"], soa)
+        raw_graph_config = config["graph"]
+        graph = build_graph(raw_graph_config, soa)
+
+        # For bring-your-own graphs, graph_to_config() replaces the file
+        # path with literal node-link data so to_config() is self-contained.
+        # For generated graphs, it echoes source_config unchanged.
+        safe_graph_config = graph_to_config(graph, raw_graph_config)
 
         return cls(
             graph=graph,
             agent_types=agent_types,
+            _source_config=safe_graph_config
         )
 
     def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:

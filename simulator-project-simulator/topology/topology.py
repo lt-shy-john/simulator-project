@@ -41,6 +41,8 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+import numpy as np
+
 from runner.soa import SoAPopulation
 
 
@@ -129,13 +131,18 @@ def validate_agent_types(agent_types: list[str] | None, soa: SoAPopulation) -> N
 # Factory
 # ---------------------------------------------------------------------------
 
-def build_topologies(config: dict, soa: SoAPopulation) -> dict[str, TopologyProtocol]:
+def build_topologies(config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None) -> dict[str, TopologyProtocol]:
     """Factory — reads the 'topologies' section of the simulation config
     and returns a dict of named topology instances.
 
     Args:
         config: the full simulation config dict containing a 'topologies' section
         soa: the current SoAPopulation, passed through to topology constructors
+        rng: shared seeded generator (typically from Simulation.from_config).
+             Forwarded to every topology's from_config — topologies that use
+             randomness (currently RandomSampleTopology) draw from this
+             shared generator rather than building their own, so the whole
+             simulation stays reproducible under one seed.
 
     Returns:
         dict mapping topology name to topology instance, e.g.
@@ -154,7 +161,7 @@ def build_topologies(config: dict, soa: SoAPopulation) -> dict[str, TopologyProt
         )
 
     return {
-        name: _build_single_topology(name, topology_config, soa)
+        name: _build_single_topology(name, topology_config, soa, rng)
         for name, topology_config in topologies_config.items()
     }
 
@@ -163,6 +170,7 @@ def _build_single_topology(
     name: str,
     config: dict,
     soa: SoAPopulation,
+    rng: np.random.Generator | None = None
 ) -> TopologyProtocol:
     """Internal factory — constructs a single topology from its config section.
 
@@ -172,6 +180,8 @@ def _build_single_topology(
         name: the topology name (used in error messages)
         config: the config section for this topology
         soa: the current SoAPopulation
+        rng: shared seeded generator, forwarded to whichever from_config
+            implementation gets selected below.
 
     Raises:
         ValueError: if mode is unknown or missing
@@ -180,15 +190,15 @@ def _build_single_topology(
 
     if mode == "all_pairs":
         from topology.all_pairs import AllPairsTopology
-        return AllPairsTopology.from_config(config, soa)
+        return AllPairsTopology.from_config(config, soa, rng)
 
     elif mode == "random_sample":
         from topology.random_sample import RandomSampleTopology
-        return RandomSampleTopology.from_config(config, soa)
+        return RandomSampleTopology.from_config(config, soa, rng)
 
     elif mode == "network":
         from topology.network import NetworkTopology
-        return NetworkTopology.from_config(config, soa)
+        return NetworkTopology.from_config(config, soa, rng)
 
     else:
         raise ValueError(

@@ -31,6 +31,8 @@ Config shape:
 
 from __future__ import annotations
 
+import numpy as np
+
 from runner.soa import SoAPopulation, ID_KEY
 from topology.topology import validate_agent_types
 
@@ -57,7 +59,7 @@ class AllPairsTopology:
         self.agent_types = agent_types
 
     @classmethod
-    def from_config(cls, config: dict, soa: SoAPopulation) -> "AllPairsTopology":
+    def from_config(cls, config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None) -> "AllPairsTopology":
         """Construct from a topology config section.
 
         Args:
@@ -68,6 +70,9 @@ class AllPairsTopology:
                 }
             soa: the current SoAPopulation, used to validate agent_types
                  refers to real agent types present in the population
+            rng: shared seeded generator, forwarded by build_topologies fo
+                 signature consistency with TopologyProtocol. Unused here —
+                 an all-pairs topology has no randomness to seed.
 
         Raises:
             ValueError: if agent_types contains a type not present in soa

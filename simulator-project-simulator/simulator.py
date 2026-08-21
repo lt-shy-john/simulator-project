@@ -3,7 +3,6 @@ import sys
 import datetime
 
 import runner.commands as commands
-from runner.simulation import Simulation
 import util.customLogger as logger
 
 filename = 'Test-' + datetime.datetime.now().strftime("%Y%m%d")
@@ -16,15 +15,22 @@ if len(sys.argv) == 3:
     except IndexError:
         root_logger.info("No simulation agent number specified.")
         commands.set_N()
+    else:
+        commands.settings["N"] = N
     try:
         T = int(sys.argv[2])
     except IndexError:
         root_logger.info("No simulation agent time specified.")
         commands.set_T()
+    else:
+        commands.settings["T"] = T
 
+    # Express 'run' can't build a full config the way 'setting' does —
+    # N and T are the only inputs available here — so it runs a
+    # hardcoded minimal default config instead (see commands.default_config)
+    # as a quick smoke test, not a real simulation.
     if sys.argv[-1] == 'run':
-        simulation = Simulation(N, T, root_logger, name=filename)
-        simulation()
+        commands.do_run_default()
 else:
     if sys.argv[-1] == 'help':
         commands.usage()

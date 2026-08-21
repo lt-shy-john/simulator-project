@@ -132,9 +132,9 @@ class SimulationConfig(BaseModel):
     # each type's `count`; any shortfall is filled by normal generation.
     initial_population: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
 
-    topologies: dict[str, dict]
-    behaviours: dict[str, list[dict]]
-    scheduler: dict
+    topologies: dict[str, TopologyConfig]
+    behaviours: dict[str, list[BehaviourEntry]]
+    scheduler: SchedulerConfigSchema
     stopping: StoppingConfig
 
     @model_validator(mode="after")

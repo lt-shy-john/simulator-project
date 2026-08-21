@@ -177,13 +177,46 @@ class TestSchemaValidation:
         assert "count must be > 0" in str(exc_info.value)
 
     def test_missing_topologies_section_raises_on_construction(self, base_config):
-        # topologies is a required SimulationConfig field but its *contents*
-        # are validated lazily by build_topologies at from_config() time,
-        # not by Pydantic itself (see S-08 design notes) — still must
-        # raise a descriptive error either way.
+        # An empty topologies dict is a valid *type* (dict[str, TopologyConfig]
+        # with zero entries) — Pydantic doesn't reject emptiness by itself.
+        # build_topologies' own "must have at least one" check still catches
+        # this at from_config() time with a descriptive error.
         base_config["topologies"] = {}
         with pytest.raises(ValueError, match="topologies"):
             Simulation.from_config(base_config)
+
+    def test_invalid_topology_mode_rejected_by_discriminated_union(self, base_config):
+        base_config["topologies"]["contact"]["mode"] = "not_a_real_mode"
+        with pytest.raises(ValidationError) as exc_info:
+            SimulationConfig.model_validate(base_config)
+        assert "all_pairs" in str(exc_info.value)  # names the valid options
+
+    def test_random_sample_requires_exactly_one_of_k_or_proportion(self, base_config):
+        base_config["topologies"]["social"] = {"mode": "random_sample", "agent_types": ["person"]}
+        with pytest.raises(ValidationError, match="exactly one of 'k' or 'proportion'"):
+            SimulationConfig.model_validate(base_config)
+
+    def test_random_sample_rejects_both_k_and_proportion(self, base_config):
+        base_config["topologies"]["social"] = {
+            "mode": "random_sample", "k": 2, "proportion": 0.5, "agent_types": ["person"],
+            }
+        with pytest.raises(ValidationError, match="exactly one of 'k' or 'proportion'"):
+            SimulationConfig.model_validate(base_config)
+
+    def test_scheduler_priority_without_priority_attribute_rejected(self, base_config):
+        base_config["scheduler"] = {"order": "priority", "read_mode": "frozen"}
+        with pytest.raises(ValidationError, match="priority_attribute"):
+            SimulationConfig.model_validate(base_config)
+
+    def test_scheduler_invalid_order_rejected(self, base_config):
+        base_config["scheduler"]["order"] = "not_a_real_order"
+        with pytest.raises(ValidationError):
+            SimulationConfig.model_validate(base_config)
+
+    def test_behaviour_entry_with_neither_module_nor_expression_rejected(self, base_config):
+        base_config["behaviours"]["person"] = [{"topology_name": "contact"}]
+        with pytest.raises(ValidationError):
+            SimulationConfig.model_validate(base_config)
 
 
 # ---------------------------------------------------------------------------

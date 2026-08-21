@@ -15,6 +15,33 @@ def prompt_int(prompt="> "):
         except ValueError:
             print("Please enter a whole number.")
 
+def prompt_float(prompt="> "):
+    while True:
+        raw = input(prompt).strip()
+        try:
+            return float(raw)
+        except ValueError:
+            print("Please enter a number.")
+
+def prompt_yes_no(prompt="> "):
+    while True:
+        raw = input(prompt).strip().lower()
+        if raw in ("y", "yes"):
+            return True
+        if raw in ("n", "no"):
+            return False
+        print("Please enter y or n.")
+
+def prompt_choice(prompt, choices):
+    """Prompt until the user enters one of `choices` (case-insensitive).
+    Returns the matching entry from `choices`, preserving its original case."""
+    lowered = {c.lower(): c for c in choices}
+    while True:
+        raw = input(prompt).strip().lower()
+        if raw in lowered:
+            return lowered[raw]
+        print(f"Please enter one of: {', '.join(choices)}")
+
 # Export and import
 
 def agent_type_to_json(agent_type: AgentType) -> str:

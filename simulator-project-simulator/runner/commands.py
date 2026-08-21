@@ -2,8 +2,12 @@ import sys
 import inspect
 import logging
 
+from pydantic import ValidationError
+
 import util.util as util
 from runner.simulation import Simulation
+from runner.simulationConfig import SimulationConfig
+from agents.models import AttributeType
 
 logger = logging.getLogger('simulator')
 
@@ -31,11 +35,210 @@ def do_help():
     logger.info('')  # Extra new line
 
 def do_run():
-    current_run = Simulation(settings["N"], settings["T"], **{k: v for k, v in settings.items() if k not in ("N", "T")})
+    """Run the simulation using the config built by 'setting'."""
+
+    if "config" not in settings:
+        logger.warning("No simulation configured yet — run 'setting' first.")
+        return
+    current_run = Simulation.from_config(settings["config"])
+    current_run()
+    
+def default_config(n: int, t: int) -> dict:
+    """Build a minimal, hardcoded config for express-mode smoke tests
+    (`python3 simulator.py N T run`) — N and T are the only inputs a user
+    provides at that point, so this fills in the rest with fixed
+    placeholder choices: one agent type with a single int attribute
+    starting at 0, incremented by 1 each step, on an all_pairs topology,
+    running to completion in all_at_once/frozen order.
+
+    This is deliberately not configurable — it exists to let 'N T run'
+    keep working as a quick sanity check, not to express real simulation
+    intent. Use 'setting' for anything that needs to mean something.
+    """
+    return {
+        "seed": None,
+        "agent_types": [
+            {
+                "name": "agent",
+                "count": n,
+                "generation_mode": "heterogeneous",
+                "attributes": [
+                    {
+                        "name": "step_count",
+                        "type": "int",
+                        "population_method": "distribution",
+                        "distribution": {"kind": "fixed", "value": 0},
+                    }
+                ],
+            }
+        ],
+        "topologies": {"contact": {"mode": "all_pairs", "agent_types": ["agent"]}},
+        "behaviours": {
+            "agent": [{"expression": 'state["step_count"] = 1', "topology_name": "contact"}]
+        },
+        "scheduler": {"order": "all_at_once", "read_mode": "frozen"},
+        "stopping": {"max_steps": t, "conditions": [], "combinator": "OR"},
+    }
+
+def do_run_default():
+    """Run the express-mode default config (see default_config) using
+    the currently set N and T. Does not require 'setting' to have been
+    run — this is the express-mode `N T run` path's entry point."""
+    if "N" not in settings or "T" not in settings:
+        logger.warning("N and T must be set before running the default config.")
+        return
+    logger.info(
+        f"Running default config: {settings['N']} agents, "
+        f"{settings['T']} steps. Run 'setting' instead to configure a "
+        f"real simulation."
+    )
+    current_run = Simulation.from_config(default_config(settings["N"], settings["T"]))
     current_run()
 
 def do_setting():
-    pass
+    """Interactively build a full simulation config (agent type,
+    attributes, topology, behaviour, scheduler, stopping) and validate
+    it against SimulationConfig.
+
+    Scope for this MVP flow — each is a deliberate simplification, not
+    a schema limitation (the underlying config supports more):
+      - exactly one agent type, always generation_mode="heterogeneous"
+        (every attribute is distribution-driven; homogeneous/fixed-value
+        agent types aren't reachable through this prompt flow yet)
+      - exactly one topology, one behaviour (a single expression, not a
+        registered module — module params aren't prompt-able generically)
+      - no extra stopping conditions beyond max_steps (T, already
+        collected at startup)
+    On a validation error, the whole flow is discarded — run 'setting'
+    again from scratch rather than being re-prompted just for the
+    offending field.
+    """
+    if "N" not in settings:
+        set_N()
+    if "T" not in settings:
+        set_T()
+
+    agent_type_name = input("Agent type name [agent]: ").strip() or "agent"
+
+    attributes = []
+    logger.info(f"Now define attributes for '{agent_type_name}'.")
+    while True:
+        attributes.append(_prompt_attribute())
+        if not util.prompt_yes_no("Add another attribute? (y/n): "):
+            break
+
+    topology_name, topology = _prompt_topology(agent_type_name)
+    behaviour_entry = _prompt_behaviour(topology_name)
+    scheduler = _prompt_scheduler()
+
+    config = {
+        "seed": None,
+        "agent_types": [
+            {
+                "name": agent_type_name,
+                "count": settings["N"],
+                "generation_mode": "heterogeneous",
+                "attributes": attributes,
+            }
+        ],
+        "topologies": {topology_name: topology},
+        "behaviours": {agent_type_name: [behaviour_entry]},
+        "scheduler": scheduler,
+        "stopping": {"max_steps": settings["T"], "conditions": [], "combinator": "OR"},
+    }
+
+    try:
+        SimulationConfig.model_validate(config)
+    except ValidationError as e:
+        logger.warning(f"Configuration is invalid — nothing saved. Details:\n{e}")
+        return
+
+    settings["config"] = config
+    logger.info("Configuration saved. Run 'run' to start the simulation.")
+
+def _prompt_attribute() -> dict:
+    """Prompt for one AttributeDefinition-shaped dict: name, type, and a
+    matching distribution. Always population_method='distribution', to
+    match this flow's heterogeneous-only scope (see do_setting)."""
+    name = input("  Attribute name: ").strip()
+    type_choice = util.prompt_choice(
+        f"  Type ({'/'.join(t.value for t in AttributeType)}): ",
+        [t.value for t in AttributeType],
+    )
+
+    if type_choice in (AttributeType.INT.value, AttributeType.FLOAT.value):
+        if util.prompt_yes_no("  Fixed value (not a range)? (y/n): "):
+            value = (
+                util.prompt_int("  Value: ") if type_choice == AttributeType.INT.value
+                else util.prompt_float("  Value: ")
+            )
+            distribution = {"kind": "fixed", "value": value}
+        else:
+            prompt_fn = util.prompt_int if type_choice == AttributeType.INT.value else util.prompt_float
+            low = prompt_fn("  Low: ")
+            high = prompt_fn("  High: ")
+            distribution = {"kind": "uniform", "low": low, "high": high}
+
+    elif type_choice == AttributeType.BOOL.value:
+        value = util.prompt_yes_no("  Fixed value — true? (y/n): ")
+        distribution = {"kind": "fixed", "value": value}
+
+    else:  # categorical
+        raw = input("  Categories (comma-separated, equal weight): ").strip()
+        categories = [c.strip() for c in raw.split(",") if c.strip()]
+        distribution = {"kind": "categorical", "weights": {c: 1.0 for c in categories}}
+
+    return {
+        "name": name,
+        "type": type_choice,
+        "population_method": "distribution",
+        "distribution": distribution,
+    }
+
+def _prompt_topology(agent_type_name: str) -> tuple[str, dict]:
+    """Prompt for a single topology. Returns (name, config-dict)."""
+    mode = util.prompt_choice(
+        "Topology mode (all_pairs/random_sample/network): ",
+        ["all_pairs", "random_sample", "network"],
+    )
+    name = input("Topology name [contact]: ").strip() or "contact"
+
+    if mode == "all_pairs":
+        return name, {"mode": "all_pairs", "agent_types": [agent_type_name]}
+
+    if mode == "random_sample":
+        k = util.prompt_int("  k (neighbours per agent): ")
+        return name, {"mode": "random_sample", "k": k, "agent_types": [agent_type_name]}
+
+    # network — MVP only offers erdos_renyi, matching N already collected
+    p = util.prompt_float("  Edge probability p (0.0-1.0): ")
+    return name, {
+        "mode": "network",
+        "agent_types": [agent_type_name],
+        "graph": {"type": "erdos_renyi", "n": settings["N"], "p": p},
+    }
+
+def _prompt_behaviour(topology_name: str) -> dict:
+    """Prompt for a single expression-based behaviour entry. Module-based
+    behaviours aren't offered here — a registered module's constructor
+    params vary per module, so there's no generic prompt for them."""
+    logger.info(
+        "Enter a Python expression to run on each agent each step, "
+        "e.g. state[\"age\"] = 1"
+    )
+    expression = input("  Expression: ").strip()
+    return {"expression": expression, "topology_name": topology_name}
+
+def _prompt_scheduler() -> dict:
+    order = util.prompt_choice(
+        "Scheduling order (all_at_once/random/priority) [all_at_once]: ",
+        ["all_at_once", "random", "priority"],
+    ) if input("Customise scheduling? (y/n): ").strip().lower() in ("y", "yes") else "all_at_once"
+
+    scheduler = {"order": order, "read_mode": "frozen"}
+    if order == "priority":
+        scheduler["priority_attribute"] = input("  Priority attribute name: ").strip()
+    return scheduler
 
 def do_summary():
     """Show all available settings and their values."""

@@ -137,6 +137,17 @@ class Simulation():
         dumped = cfg.model_dump()
 
         topologies = build_topologies(dumped, soa, rng=rng)
+
+        # For bring-your-own network graphs, the original config has
+        # graph: {source: "path/to/file"} — a file path that would make
+        # to_config() output non-self-contained. Replace each network
+        # topology's graph config with the safe, self-contained version
+        # produced by graph_to_config() (now stored on the topology instance
+        # as _source_config). Generated graphs are already safe and echo
+        # their params unchanged.
+        for topo_name, topo in topologies.items():
+            if hasattr(topo, "_source_config") and topo._source_config is not None:
+                cfg.topologies[topo_name].graph = topo._source_config
         # compile_behaviours expects the config key "behaviour" (singular) —
         # a pre-existing convention from S-06, already relied on by its own
         # test suite. SimulationConfig uses "behaviours" (plural) for

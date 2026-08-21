@@ -43,7 +43,7 @@ import networkx as nx
 import numpy as np
 
 from runner.soa import SoAPopulation, ID_KEY
-from topology.graph_builder import build_graph
+from topology.graph_builder import build_graph, graph_to_config
 from topology.topology import validate_agent_types
 
 
@@ -110,11 +110,18 @@ class NetworkTopology:
         agent_types = config.get("agent_types", None)
         validate_agent_types(agent_types, soa)
 
-        graph = build_graph(config["graph"], soa)
+        raw_graph_config = config["graph"]
+        graph = build_graph(raw_graph_config, soa)
+
+        # For bring-your-own graphs, graph_to_config() replaces the file
+        # path with literal node-link data so to_config() is self-contained.
+        # For generated graphs, it echoes source_config unchanged.
+        safe_graph_config = graph_to_config(graph, raw_graph_config)
 
         return cls(
             graph=graph,
             agent_types=agent_types,
+            _source_config=safe_graph_config
         )
 
     def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:

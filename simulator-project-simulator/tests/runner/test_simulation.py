@@ -336,6 +336,99 @@ class TestToConfigRoundTrip:
 
         assert ages1 == ages2
 
+# ---------------------------------------------------------------------------
+# Network topology — graph config round-trip and bring-your-own file handling
+# ---------------------------------------------------------------------------
+
+class TestNetworkTopologyRoundTrip:
+    def test_generated_graph_round_trips_as_params(self, base_config):
+        """A generated graph's to_config() should echo the generation
+        params (type, n, p, seed) — not embed literal node/edge data."""
+        base_config["topologies"] = {
+            "net": {
+                "mode": "network",
+                "agent_types": ["person"],
+                "graph": {"type": "erdos_renyi", "n": 5, "p": 0.5, "seed": 7},
+            }
+        }
+        base_config["behaviours"]["person"][0]["topology_name"] = "net"
+
+        sim = Simulation.from_config(base_config)
+        out = sim.to_config()
+        graph_out = out["topologies"]["net"]["graph"]
+
+        assert graph_out.get("type") == "erdos_renyi"
+        assert "source" not in graph_out
+        assert "data" not in graph_out
+
+    def test_generated_graph_round_trips_back_into_from_config(self, base_config):
+        """from_config(sim.to_config()) must work for a network topology."""
+        base_config["topologies"] = {
+            "net": {
+                "mode": "network",
+                "agent_types": ["person"],
+                "graph": {"type": "erdos_renyi", "n": 5, "p": 0.5, "seed": 7},
+            }
+        }
+        base_config["behaviours"]["person"][0]["topology_name"] = "net"
+
+        sim1 = Simulation.from_config(base_config)
+        sim2 = Simulation.from_config(sim1.to_config())
+
+        assert len(sim2.live_population) == len(sim1.live_population)
+        assert "net" in sim2.topologies
+
+    def test_byo_graph_to_config_replaces_path_with_node_link_data(self, tmp_path, base_config):
+        """A bring-your-own graph: to_config() must not echo the source
+        file path — it must embed literal node-link data so the config
+        section is self-contained.
+
+        Note on round-trip rehydration scope: a BYO graph's node IDs are
+        the UUIDs of a specific run's agents. Rehydrating to a *new*
+        Simulation via from_config() would generate fresh UUIDs that
+        wouldn't match. Full round-trip rehydration for BYO graphs
+        requires UUID-preserving population serialization — S-09 scope.
+        S-08 guarantees only that the path is replaced with literal data.
+        """
+        import networkx as nx
+        from topology.graph_builder import graph_to_config
+
+        # Test graph_to_config() directly — the unit responsible for
+        # the path -> literal data conversion.
+        g = nx.Graph()
+        g.add_nodes_from(["uuid-a", "uuid-b", "uuid-c"])
+        g.add_edge("uuid-a", "uuid-b")
+        source_config = {"source": str(tmp_path / "test.graphml")}
+
+        result = graph_to_config(g, source_config)
+
+        assert "source" not in result, (
+            f"File path should be replaced, got: {result}"
+        )
+        assert result.get("type") == "node_link"
+        assert "data" in result
+
+        # Confirm the node-link data reconstructs the same graph
+        reconstructed = nx.node_link_graph(result["data"])
+        assert set(reconstructed.nodes()) == set(g.nodes())
+        assert set(reconstructed.edges()) == set(g.edges())
+
+    def test_graph_to_config_echoes_generated_params(self):
+        """graph_to_config() for a generated graph should echo the
+        generation params unchanged — not embed literal data."""
+        import networkx as nx
+        from topology.graph_builder import graph_to_config
+
+        g = nx.erdos_renyi_graph(5, 0.5, seed=42)
+        source_config = {"type": "erdos_renyi", "n": 5, "p": 0.5, "seed": 42}
+
+        result = graph_to_config(g, source_config)
+
+        assert result is source_config  # same object, not a copy
+        assert result["type"] == "erdos_renyi"
+        assert "data" not in result
+
+
 
 # ---------------------------------------------------------------------------
 # AC5 — same config  seed => identical results across two runs

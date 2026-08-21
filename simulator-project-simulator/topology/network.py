@@ -40,6 +40,7 @@ Config shape:
 from __future__ import annotations
 
 import networkx as nx
+import numpy as np
 
 from runner.soa import SoAPopulation, ID_KEY
 from topology.graph_builder import build_graph
@@ -70,7 +71,7 @@ class NetworkTopology:
         self._source_config = _source_config  # retained verbatim for to_config()
 
     @classmethod
-    def from_config(cls, config: dict, soa: SoAPopulation) -> "NetworkTopology":
+    def from_config(cls, config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None) -> "NetworkTopology":
         """Construct from a topology config section.
 
         Builds or loads the graph via graph_builder, then constructs
@@ -90,6 +91,12 @@ class NetworkTopology:
                 }
             soa: the current SoAPopulation, needed by graph_builder for
                  node relabelling and validation
+            rng: shared seeded generator (typically from Simulation.from_config).
+                 When provided, takes priority over this topology's own
+                 config-level 'seed' — this is how a single simulation-wide
+                 seed flows into every topology consistently. If omitted,
+                 falls back to a generator built from config['seed'], for
+                 topology-only reproducibility when used standalone.
 
         Raises:
             ValueError: if 'graph' section is missing from config, or if

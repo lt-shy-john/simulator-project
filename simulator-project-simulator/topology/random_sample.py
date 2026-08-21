@@ -92,7 +92,7 @@ class RandomSampleTopology:
         self.rng = rng if rng is not None else np.random.default_rng(seed)
 
     @classmethod
-    def from_config(cls, config: dict, soa: SoAPopulation) -> "RandomSampleTopology":
+    def from_config(cls, config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None) -> "RandomSampleTopology":
         """Construct from a topology config section.
 
         Args:
@@ -103,6 +103,11 @@ class RandomSampleTopology:
                     "seed": 42,
                     "agent_types": ["person"]
                 }
+            soa: the current SoAPopulation, used to validate agent_types
+                 refers to real agent types present in the population
+            rng: shared seeded generator, forwarded by build_topologies fo
+                 signature consistency with TopologyProtocol. Unused here —
+                 an all-pairs topology has no randomness to seed.
         """
         agent_types = config.get("agent_types", None)
         validate_agent_types(agent_types, soa)

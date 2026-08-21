@@ -4,7 +4,6 @@ import logging
 import warnings
 import numpy as np
 from typing import Any
-from pydantic import BaseModel, Field, model_validator
 
 from agents.agents import AgentType
 from runner.state import AgentState, initialise_population
@@ -90,7 +89,7 @@ class Simulation():
             The final StopResult that ended the run.
         """
         start_time = datetime.datetime.now()
-        filename = self.params['name'] if self.params['name'] != "" else ""
+
         '''
         Simulation starts here
         '''
@@ -116,8 +115,6 @@ class Simulation():
             )
             time.sleep(1)  # todo: Find out why at the simulation code side there must be a time sleep as well
 
-        if filename != "":
-            self.logger.info(f"Log file printed in {filename}.txt")
         self.logger.info(f"Simulation finished in {datetime.datetime.now() - start_time}. ")
         self.logger.info(
             f"Simulation finished at step {self.step_number}: "

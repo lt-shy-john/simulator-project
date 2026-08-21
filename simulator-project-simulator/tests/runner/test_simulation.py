@@ -57,7 +57,7 @@ def base_config() -> dict:
         },
         "behaviours": {
             "person": [
-                {"expression": 'state["age"] = 1', "topology_name": "contact"},
+                {"expression": 'state["age"] += 1', "topology_name": "contact"},
             ],
         },
         "scheduler": {"order": "all_at_once", "read_mode": "frozen"},

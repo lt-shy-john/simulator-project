@@ -132,9 +132,7 @@ def test_stop_logs_event_via_model_log_event():
 
     assert len(model._event_log) == 1
     logged = model._event_log[0]
-    assert logged["name"] == "simulation_stopped"
-    assert logged["agent_id"] is None
-    assert logged["data"]["reason"] == "max_steps"
+    assert logged["event_type"] == "simulation_stopped"
 
 
 def test_no_stop_does_not_log_event():

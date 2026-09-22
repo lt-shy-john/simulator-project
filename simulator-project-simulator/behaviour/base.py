@@ -78,7 +78,8 @@ class BehaviourModule(Protocol):
                       the module has no visibility into which mode is active.
             model: the simulation-level context object (see model.py) —
                    gives access to step number, full population, global
-                   parameters, shared RNG, and event logging. params, rng,
-                   and log_event are backed by tickets not yet built
-                   (S-11, S-10 respectively) — see model.py for details.
+                   parameters, shared RNG, and event logging. params and
+                   rng are backed by S-11 (SimulationConfig.params/.seed);
+                   log_event's real persistence is still pending S-09 —
+                   see model.py for details.
         """

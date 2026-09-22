@@ -102,6 +102,10 @@ def do_setting():
 
     Scope for this MVP flow — each is a deliberate simplification, not
     a schema limitation (the underlying config supports more):
+      - seed is a single optional int prompt (S-11); there's no prompt
+        for config.params (global behaviour-module parameters) — those
+        aren't reachable through this flow yet, same reasoning as
+        module-based behaviours below
       - exactly one agent type, always generation_mode="heterogeneous"
         (every attribute is distribution-driven; homogeneous/fixed-value
         agent types aren't reachable through this prompt flow yet)
@@ -118,6 +122,13 @@ def do_setting():
     if "T" not in settings:
         set_T()
 
+    logger.info(
+        "Optional: set a seed for reproducible runs (same seed + config "
+        "-> identical results). Leave blank for an unseeded, "
+        "non-reproducible run."
+    )
+    seed = util.prompt_optional_int("Seed [blank for none]: ")
+
     agent_type_name = input("Agent type name [agent]: ").strip() or "agent"
 
     attributes = []
@@ -132,7 +143,7 @@ def do_setting():
     scheduler = _prompt_scheduler()
 
     config = {
-        "seed": None,
+        "seed": seed,
         "agent_types": [
             {
                 "name": agent_type_name,

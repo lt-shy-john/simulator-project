@@ -15,6 +15,23 @@ def prompt_int(prompt="> "):
         except ValueError:
             print("Please enter a whole number.")
 
+def prompt_optional_int(prompt="> ") -> int | None:
+    """Prompt for an int, or None if the user leaves the line blank.
+
+    Unlike prompt_int, an empty response is a valid answer here (it
+    means "no value") rather than something to keep re-prompting for.
+    Used for S-11's optional seed field — leaving it blank means the
+    simulation is unseeded (non-reproducible), not a validation error.
+    """
+    while True:
+        raw = input(prompt).strip()
+        if raw == "":
+            return None
+        try:
+            return int(raw)
+        except ValueError:
+            print("Please enter a whole number, or leave blank for no seed.")
+
 def prompt_float(prompt="> "):
     while True:
         raw = input(prompt).strip()

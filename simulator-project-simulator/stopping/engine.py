@@ -49,7 +49,7 @@ def check_stopping(model, config: StoppingConfig) -> StopResult:
 
 def _log_stop(model, result: StopResult) -> None:
     model.log_event(
-        name="simulation_stopped",
+        event_type="simulation_stopped",
         agent_id=None,
         data={"reason": result.reason, "detail": result.detail},
     )

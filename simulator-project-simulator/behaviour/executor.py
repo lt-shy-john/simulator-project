@@ -40,18 +40,16 @@ from dataclasses import dataclass
 from typing import Any, Union
 import sys
 
-from runner.state import AgentState
 from runner.soa import to_soa, ID_KEY
 from topology.topology import TopologyProtocol
-from agents.agents import AgentType
 from behaviour.base import BehaviourModule
-from behaviour.model import SimulationModel
 from behaviour.accessor import NeighbourAccessor, WriteMode, apply_deferred_writes
 from behaviour.expressions import evaluate_expression
 from behaviour.registry import get_behaviour
 from scheduler.scheduler import ScheduleConfig, resolve_step_agents, consume_lifetime_action
 from lifecycle.lifecycle import apply_pending_lifecycle_events
 from stopping.engine import check_stopping, StopResult, StoppingConfig
+from util.collector import collect_aggregates
 
 
 # ---------------------------------------------------------------------------
@@ -171,47 +169,19 @@ def _build_neighbour_cache(
 _DEFAULT_STOPPING_CONFIG = StoppingConfig(max_steps=sys.maxsize)
 
 def run_step(
-    live_population: dict[str, AgentState],
-    compiled_behaviours: dict[str, list[CompiledEntry]],
-    topologies: dict[str, TopologyProtocol],
-    model: SimulationModel,
-    schedule: ScheduleConfig,
-    agent_types: dict[str, AgentType],
-    step_number: int,
-    stopping_config: StoppingConfig = _DEFAULT_STOPPING_CONFIG,
+    live_population, compiled_behaviours, topologies, model, schedule,
+    agent_types, step_number, aggregate_collectors=None, stopping_config=_DEFAULT_STOPPING_CONFIG,
 ) -> StopResult:
-    """Execute one simulation step, mutating live_population in place.
-
-    Args:
-        live_population: agent_id -> AgentState, the population being
-            mutated this step
-        compiled_behaviours: output of compile_behaviours
-        topologies: named topologies from build_topologies (S-03)
-        model: a PERSISTENT SimulationModel — built once before the step
-            loop starts, reused (not rebuilt) across every call to
-            run_step. Reset for this step via model._reset_for_step at
-            the top of this function.
-        schedule: compiled ScheduleConfig from scheduling.compile_scheduling
-        agent_types: agent_type_name -> AgentType, needed for
-            reproduce/external_entry fresh-attribute sampling
-        step_number: the current step number, tracked and incremented by
-            the caller — run_step has no internal counter of its own
-    """
-    # Reset step-scoped model state (step, agents, pending_events).
-    # Run-scoped state (rng, params) is untouched.
     model._reset_for_step(step_number, live_population)
+    model.log_event("step_start", agent_id=None)
 
-    frozen_population: dict[str, AgentState] = {
+    frozen_population = {
         agent_id: agent.snapshot() for agent_id, agent in live_population.items()
     }
-
     soa = to_soa(list(frozen_population.values()))
     neighbour_cache = _build_neighbour_cache(topologies, soa)
-
     read_source = frozen_population if schedule.read_mode == "frozen" else live_population
-
     deferred_writes: list[tuple[str, str, Any]] = []
-
     ordered_agent_ids = resolve_step_agents(schedule, live_population, model.rng)
 
     for agent_id in ordered_agent_ids:
@@ -219,37 +189,34 @@ def run_step(
         entries = compiled_behaviours.get(agent.agent_type_name)
         if not entries:
             continue
-
         for entry in entries:
             neighbours = (
                 neighbour_cache.get(entry.topology_name, {}).get(agent.agent_id, [])
-                if entry.topology_name is not None
-                else []
+                if entry.topology_name is not None else []
             )
-
             if isinstance(entry, CompiledModuleEntry):
                 accessor = NeighbourAccessor(
-                    read_source=read_source,
-                    live_population=live_population,
-                    deferred_writes=deferred_writes,
-                    write_mode=entry.write_mode,
+                    read_source=read_source, live_population=live_population,
+                    deferred_writes=deferred_writes, write_mode=entry.write_mode,
                 )
                 entry.instance.apply(agent, neighbours, accessor, model)
-
-            else:  # CompiledExpressionEntry
-                neighbours_state = [
-                    read_source[nid].state for nid in neighbours
-                ]
+            else:
+                neighbours_state = [read_source[nid].state for nid in neighbours]
                 evaluate_expression(entry.expr, agent, neighbours_state)
-
         consume_lifetime_action(schedule, agent)
 
     apply_deferred_writes(live_population, deferred_writes)
 
-    # Lifecycle events (reproduce/remove/external_entry) queued via
-    # model.* calls during this step are applied last, after everything
-    # else — new agents this step never got a turn, removed agents'
-    # in-progress state changes are simply discarded.
-    apply_pending_lifecycle_events(live_population, model._pending_events, agent_types, model.rng)
+    lifecycle_events = apply_pending_lifecycle_events(
+        live_population, model._pending_events, agent_types, model.rng
+    )
+    for record in lifecycle_events:
+        model.log_event(record["event_type"], agent_id=record["agent_id"], data=record["data"])
 
+    # Aggregate collection - end of step, after lifecycle events, same
+    # point stopping conditions are checked.
+    row = collect_aggregates(model, aggregate_collectors or [])
+    model._aggregate_log.append(row)
+
+    model.log_event("step_end", agent_id=None)
     return check_stopping(model, stopping_config)

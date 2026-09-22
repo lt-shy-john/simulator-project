@@ -105,54 +105,66 @@ def apply_pending_lifecycle_events(
     pending_events: list[LifecycleEvent],
     agent_types: dict[str, AgentType],
     rng: np.random.Generator,
-) -> None:
+) -> list[dict[str, Any]]:
     """Drain the pending lifecycle event queue, mutating live_population
-    in place. Called once by the executor after all agents have been
-    processed for this step — mirrors apply_deferred_writes exactly.
+    in place, and return a list of event records describing what was
+    applied - for the caller (run_step) to feed into model.log_event().
 
-    Events are applied in the order they were queued. A RemoveEvent for
-    an agent_id already removed by an earlier event in the same queue
-    (e.g. queued twice by two different modules) is treated as a no-op
-    rather than an error — the end state (agent gone) is the same either
-    way, and raising here would make queue ordering fragile for no
-    real benefit.
+    This function has no reference to `model` by design: it reports what
+    happened rather than logging it directly, so S-07's lifecycle logic
+    doesn't take on a dependency on the Event Log's existence.
 
-    Args:
-        live_population: agent_id -> AgentState, mutated in place —
-            new agents are added, removed agents are deleted
-        pending_events: the queue populated during this step via
-            model.reproduce() / model.remove() / model.external_entry()
-        agent_types: agent_type_name -> AgentType, needed to look up
-            AttributeDefinitions for fresh-sampling (reproduce's fresh
-            attributes, and all of external_entry's attributes)
-        rng: shared seeded generator (typically model.rng) used for all
-            fresh-attribute sampling in this call — same generator the
-            rest of the simulation draws from, so reproduce()/
-            external_entry() stay reproducible under a fixed seed.
+    A RemoveEvent for an agent_id already removed by an earlier event in
+    the same queue is still a no-op for population state, but is not
+    logged as agent_removed - since the agent wasn't actually removed by
+    this call, logging it would misrepresent what happened this step.
 
-    Raises:
-        KeyError: if a ReproduceEvent's parent_id is not found in
-            live_population, or if agent_type is not found in agent_types
+    Returns:
+        List of dicts shaped like {"event_type": str, "agent_id": str |
+        None, "data": dict}. "agent_id" is None for ExternalEntryEvent,
+        which creates multiple agents in one batch (ids are in
+        data["agent_ids"] instead).
     """
+    logged_events: list[dict[str, Any]] = []
+
     for event in pending_events:
         if isinstance(event, ReproduceEvent):
-            _apply_reproduce(event, live_population, agent_types, rng)
+            new_agent_id = _apply_reproduce(event, live_population, agent_types, rng)
+            logged_events.append({
+                "event_type": "agent_created",
+                "agent_id": new_agent_id,
+                "data": {"via": "reproduction", "parent_id": event.parent_id},
+            })
         elif isinstance(event, RemoveEvent):
-            live_population.pop(event.agent_id, None)  # no-op if already gone
+            existed = event.agent_id in live_population
+            live_population.pop(event.agent_id, None)
+            if existed:
+                logged_events.append({
+                    "event_type": "agent_removed",
+                    "agent_id": event.agent_id,
+                    "data": {},
+                })
         elif isinstance(event, ExternalEntryEvent):
-            _apply_external_entry(event, live_population, agent_types, rng)
+            new_agent_ids = _apply_external_entry(event, live_population, agent_types, rng)
+            logged_events.append({
+                "event_type": "agent_created",
+                "agent_id": None,
+                "data": {"via": "external_entry", "count": event.count, "agent_ids": new_agent_ids},
+            })
         else:
             raise ValueError(f"Unknown lifecycle event type: {type(event)}")
 
+    return logged_events
 
 def _apply_reproduce(
     event: ReproduceEvent,
     live_population: dict[str, AgentState],
     agent_types: dict[str, AgentType],
     rng: np.random.Generator,
-) -> None:
+) -> str:
     """Create a new agent from a ReproduceEvent, inheriting or freshly
-    sampling each attribute per event.fresh_attributes."""
+    sampling each attribute per event.fresh_attributes. Returns the new
+    agent's id."""
     if event.parent_id not in live_population:
         raise KeyError(
             f"Cannot reproduce: parent_id '{event.parent_id}' not found "
@@ -170,12 +182,10 @@ def _apply_reproduce(
     child_state: dict[str, Any] = {}
     for attr in agent_type_def.attributes:
         if attr.name in event.fresh_attributes and attr.distribution is not None:
-            # Fresh sample — same distribution logic as initial population.
             sampled_array = _sample_distribution(attr, count=1, rng=rng)
             value = sampled_array[0]
             child_state[attr.name] = value.item() if hasattr(value, "item") else value
         else:
-            # Inherit — default. Copy parent's current value exactly.
             child_state[attr.name] = parent.state.get(attr.name)
 
     child = AgentState(
@@ -184,6 +194,7 @@ def _apply_reproduce(
         state=child_state,
     )
     live_population[child.agent_id] = child
+    return child.agent_id
 
 
 def _apply_external_entry(
@@ -191,10 +202,9 @@ def _apply_external_entry(
     live_population: dict[str, AgentState],
     agent_types: dict[str, AgentType],
     rng: np.random.Generator,
-) -> None:
-    """Add `count` freshly-sampled new agents of the given type. No
-    parent — every attribute is sampled fresh, same as initial population
-    generation."""
+) -> list[str]:
+    """Add `count` freshly-sampled new agents of the given type. Returns
+    the list of new agents' ids, in creation order."""
     if event.agent_type not in agent_types:
         raise KeyError(
             f"Cannot process external entry: agent_type '{event.agent_type}' "
@@ -202,6 +212,7 @@ def _apply_external_entry(
         )
 
     agent_type_def = agent_types[event.agent_type]
+    new_agent_ids: list[str] = []
 
     for _ in range(event.count):
         new_state: dict[str, Any] = {}
@@ -211,7 +222,7 @@ def _apply_external_entry(
                 value = sampled_array[0]
                 new_state[attr.name] = value.item() if hasattr(value, "item") else value
             else:
-                new_state[attr.name] = None  # schema-only attribute, no distribution yet
+                new_state[attr.name] = None
 
         new_agent = AgentState(
             agent_id=str(uuid.uuid4()),
@@ -219,3 +230,6 @@ def _apply_external_entry(
             state=new_state,
         )
         live_population[new_agent.agent_id] = new_agent
+        new_agent_ids.append(new_agent.agent_id)
+
+    return new_agent_ids

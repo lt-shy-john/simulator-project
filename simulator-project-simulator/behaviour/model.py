@@ -29,7 +29,7 @@ Design notes:
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
-
+import time
 import numpy as np
 
 from runner.state import AgentState
@@ -175,6 +175,7 @@ class SimulationModel:
 
         # Stub event log — S-10 will replace this with real persistence.
         self._event_log: list[dict[str, Any]] = []
+        self._aggregate_log: list[dict[str, Any]] = []
 
     def _reset_for_step(self, step_number: int, live_population: dict[str, AgentState]) -> None:
         """Called by run_step once at the start of each step. Updates
@@ -205,9 +206,35 @@ class SimulationModel:
             matching = [a for a in self.agents if _evaluate_condition(filter_expr, a)]
         return sum(a.get(attr) for a in matching)
 
-    def log_event(self, name: str, agent_id: str, data: dict[str, Any] | None = None) -> None:
-        # Stub — S-10 replaces this with real persistence.
-        self._event_log.append({"name": name, "agent_id": agent_id, "data": data, "step": self.step})
+    def log_event(self, event_type: str, agent_id: str | None, data: dict[str, Any] | None = None) -> None:
+        """Append a structured event record to the in-memory event log.
+
+        No file/stdout output happens here - that's out of scope for this
+        ticket (see Event Log Memory Management placeholder). This just
+        appends to self._event_log.
+        """
+        self._event_log.append({
+            "step": self.step,
+            "event_type": event_type,
+            "agent_id": agent_id,
+            "timestamp_ms": int(time.time() * 1000),
+            "data": data if data is not None else {},
+        })
+
+    def get_events(self, event_types: list[str] | None = None) -> list[dict[str, Any]]:
+        """Return logged events, optionally filtered to the given types
+        (union - any event matching any listed type is included).
+
+        event_types=None (default) returns everything. event_types=[]
+        returns nothing.
+        """
+        if event_types is None:
+            return list(self._event_log)
+        return [e for e in self._event_log if e["event_type"] in event_types]
+
+    def get_aggregates(self) -> list[dict[str, Any]]:
+        """Return all collected aggregate rows, one dict per step."""
+        return list(self._aggregate_log)
 
     def reproduce(
         self,

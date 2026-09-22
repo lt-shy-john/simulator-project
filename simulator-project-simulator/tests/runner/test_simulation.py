@@ -24,6 +24,8 @@ from runner.simulation import Simulation
 from runner.simulationConfig import SimulationConfig
 from util.util import import_csv
 from agents.agents import AgentType
+from behaviour.base import BehaviourModule
+from behaviour.registry import register_behaviour
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +304,7 @@ class TestToConfigRoundTrip:
         sim = Simulation.from_config(base_config)
         out = sim.to_config()
         assert set(out.keys()) == {
-            "seed", "agent_types", "initial_population",
+            "seed", "params", "agent_types", "initial_population",
             "topologies", "behaviours", "scheduler", "stopping",
         }
 
@@ -493,6 +495,83 @@ class TestDeterminism:
             "social": {"mode": "random_sample", "k": 2, "agent_types": ["person"]},
         }
         base_config["behaviours"]["person"][0]["topology_name"] = "social"
+
+        sim1 = Simulation.from_config(base_config)
+        sim1()
+        ages1 = sorted(a.state["age"] for a in sim1.live_population.values())
+
+        sim2 = Simulation.from_config(base_config)
+        sim2()
+        ages2 = sorted(a.state["age"] for a in sim2.live_population.values())
+
+        assert ages1 == ages2
+
+
+# ---------------------------------------------------------------------------
+# S-11 — global parameters (config.params -> model.params) and the shared
+# RNG contract for module authors
+# ---------------------------------------------------------------------------
+
+class TestGlobalParameters:
+    def test_params_defaults_to_empty_dict(self, base_config):
+        """params is optional — a config that never mentions it still
+        validates, and model.params ends up {} rather than erroring."""
+        assert "params" not in base_config
+        cfg = SimulationConfig.model_validate(base_config)
+        assert cfg.params == {}
+
+    def test_params_accepts_arbitrary_researcher_defined_dict(self, base_config):
+        """Shape is deliberately unvalidated — any JSON-able dict a
+        researcher's behaviour modules agree on is accepted as-is."""
+        base_config["params"] = {"infection_rate": 0.1, "label": "run-a"}
+        cfg = SimulationConfig.model_validate(base_config)
+        assert cfg.params == {"infection_rate": 0.1, "label": "run-a"}
+
+    def test_from_config_wires_params_into_model(self, base_config):
+        base_config["params"] = {"threshold": 0.5}
+        sim = Simulation.from_config(base_config)
+        assert sim.model.params == {"threshold": 0.5}
+
+    def test_from_config_model_params_empty_when_omitted(self, base_config):
+        sim = Simulation.from_config(base_config)
+        assert sim.model.params == {}
+
+    def test_to_config_round_trips_params(self, base_config):
+        base_config["params"] = {"infection_rate": 0.1}
+        sim = Simulation.from_config(base_config)
+        assert sim.to_config()["params"] == {"infection_rate": 0.1}
+
+    def test_behaviour_module_reads_global_params(self, base_config):
+        """End-to-end: a module pulls a value out of model.params (config-
+        driven, not hardcoded) and it actually reaches the agent."""
+        @register_behaviour("testReadGlobalParams")
+        class ReadParamsModule(BehaviourModule):
+            def apply(self, agent, neighbours, accessor, model):
+                agent.set("age", model.params["fixed_age"])
+
+        base_config["params"] = {"fixed_age": 99}
+        base_config["behaviours"] = {
+            "person": [{"module": "testReadGlobalParams", "write_mode": "deferred"}],
+        }
+
+        sim = Simulation.from_config(base_config)
+        sim()
+
+        assert all(a.state["age"] == 99 for a in sim.live_population.values())
+
+    def test_behaviour_module_shared_rng_is_deterministic(self, base_config):
+        """Regression guard for the module-author contract documented on
+        Model.rng: a module drawing from model.rng (not the standalone
+        `random` module) must produce identical results for two runs
+        from the same seed."""
+        @register_behaviour("testUseSharedRng")
+        class UseSharedRngModule(BehaviourModule):
+            def apply(self, agent, neighbours, accessor, model):
+                agent.set("age", model.rng.integers(0, 1_000_000))
+
+        base_config["behaviours"] = {
+            "person": [{"module": "testUseSharedRng", "write_mode": "deferred"}],
+        }
 
         sim1 = Simulation.from_config(base_config)
         sim1()

@@ -125,6 +125,13 @@ class SchedulerConfigSchema(BaseModel):
 class SimulationConfig(BaseModel):
     seed: int | None = None
 
+    # S-11: global, read-only parameters exposed to every BehaviourModule
+    # via model.params (see behaviour/model.py). Plain dict, not a
+    # Pydantic sub-model — the shape is entirely researcher-defined (a
+    # module reads whatever keys it expects), so there's no fixed schema
+    # to validate here, same rationale as ModuleBehaviourEntry.params.
+    params: dict[str, Any] = Field(default_factory=dict)
+
     agent_types: list[AgentType]
 
     # Literal per-agent overrides — e.g. from CSV import. Keyed by agent

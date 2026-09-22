@@ -34,6 +34,7 @@ class TestDoSetting:
         commands.settings["N"] = 5
         commands.settings["T"] = 3
         _run_with_scripted_input(monkeypatch, [
+            "42",                   # seed
             "person",               # agent type name
             "age",                  # attribute name
             "int",                  # type
@@ -54,12 +55,14 @@ class TestDoSetting:
         assert config["agent_types"][0]["name"] == "person"
         assert config["agent_types"][0]["count"] == 5
         assert config["stopping"]["max_steps"] == 3
+        assert config["seed"] == 42
 
     def test_prompts_for_n_and_t_if_missing(self, monkeypatch):
         # No commands.settings["N"]/["T"] pre-set this time.
         _run_with_scripted_input(monkeypatch, [
             "4",                     # N, via set_N()
             "2",                     # T, via set_T()
+            "",                      # seed — blank means unseeded
             "person",
             "active",
             "bool",
@@ -76,6 +79,7 @@ class TestDoSetting:
         assert commands.settings["N"] == 4
         assert commands.settings["T"] == 2
         assert "config" in commands.settings
+        assert commands.settings["config"]["seed"] is None
 
     def test_invalid_config_is_not_saved(self, monkeypatch):
         """Duplicate attribute names -> AgentType's own validator rejects
@@ -83,6 +87,7 @@ class TestDoSetting:
         commands.settings["N"] = 5
         commands.settings["T"] = 3
         _run_with_scripted_input(monkeypatch, [
+            "",                      # seed — blank means unseeded
             "person",
             "age", "int", "n", "0", "100",
             "y",                     # add another attribute
@@ -102,6 +107,7 @@ class TestDoSetting:
         commands.settings["N"] = 3
         commands.settings["T"] = 1
         _run_with_scripted_input(monkeypatch, [
+            "7",                     # seed
             "person",
             "wealth", "float", "n", "0", "1000",
             "n",
@@ -118,6 +124,26 @@ class TestDoSetting:
         assert commands.settings["config"]["scheduler"]["order"] == "priority"
         assert commands.settings["config"]["scheduler"]["priority_attribute"] == "wealth"
 
+    def test_seed_reprompts_on_non_integer_before_accepting(self, monkeypatch):
+        """S-11: an invalid seed answer re-prompts (same behaviour as
+        every other int prompt) rather than crashing or silently
+        treating garbage input as 'no seed'."""
+        commands.settings["N"] = 2
+        commands.settings["T"] = 1
+        _run_with_scripted_input(monkeypatch, [
+            "not-a-number",          # invalid — must re-prompt
+            "13",                    # seed, accepted this time
+            "person",
+            "age", "int", "n", "0", "10", "n",
+            "all_pairs", "contact",
+            'state["age"] = 1',
+            "n",
+        ])
+
+        commands.do_setting()
+
+        assert commands.settings["config"]["seed"] == 13
+
 
 class TestDoRun:
     def test_run_without_config_warns_and_does_not_crash(self):
@@ -128,6 +154,7 @@ class TestDoRun:
         commands.settings["N"] = 3
         commands.settings["T"] = 2
         _run_with_scripted_input(monkeypatch, [
+            "",                      # seed — blank means unseeded
             "person", "age", "int", "n", "0", "10", "n",
             "all_pairs", "contact",
             'state["age"] = 1',

@@ -158,7 +158,8 @@ class Simulation():
         # "scheduling" (a pre-existing S-06 convention), SimulationConfig
         #  uses "scheduler".
         schedule = compile_scheduling({**dumped, "scheduling": dumped["scheduler"]})
-        model = SimulationModel(params={}, rng=rng)
+        # S-11: global params come from config now, not a hardcoded {}.
+        model = SimulationModel(params=dumped["params"], rng=rng)
 
         sim = cls(
             live_population=live_population,

@@ -7,8 +7,9 @@ Scope:
 
 Design notes:
   - step, agents, params, rng, count(), mean(), log_event(): see original
-    S-05 notes below — params/rng/log_event still depend on S-11/S-10,
-    not yet implemented.
+    S-05 notes below. params/rng are now backed by S-11 (SimulationConfig
+    .params / .seed, threaded in by Simulation.from_config); log_event's
+    persistence is still a stub pending S-09 (Data Collection).
   - UPDATED (S-07): reproduce(), remove(), external_entry() added.
     These are the ONLY way a behaviour module can create or destroy
     agents — expressions have no access to model at all (see
@@ -53,10 +54,16 @@ class Model(Protocol):
     """The full population, all agent types combined."""
 
     params: dict[str, Any]
-    """Global parameters. Backed by S-11 — not yet implemented."""
+    """Global, read-only parameters from SimulationConfig.params (S-11).
+    Shape is entirely researcher-defined — a module reads whatever keys
+    it expects; empty dict if the config didn't set any."""
 
     rng: np.random.Generator
-    """Shared random number generator. Backed by S-11 — not yet implemented."""
+    """Shared random number generator, seeded from SimulationConfig.seed
+    (S-11). Every stochastic call a module makes MUST draw from this —
+    e.g. self.rng.random(), never the standalone `random` module or a
+    fresh np.random.default_rng() — otherwise two runs from the same
+    seed will not produce identical results."""
 
     def count(self, filter_expr: str | None = None) -> int:
         """Count agents matching filter_expr, or all agents if None."""
@@ -112,7 +119,7 @@ class Model(Protocol):
             if agent.get("health") <= 0:
                 model.remove(agent.agent_id)
 
-            if random.random() < 0.05:
+            if model.rng.random() < 0.05:
                 model.remove(agent.agent_id)
 
         Args:
@@ -157,10 +164,13 @@ class SimulationModel:
     called by executor.py's run_step once at the start of each step —
     NOT by constructing a new SimulationModel each time.
 
-    params, rng, and log_event's actual event storage are stubbed here
-    (plain dict, unseeded default RNG, no-op append) since S-10/S-11
-    don't exist yet — replace these internals once those tickets land,
-    without needing to change this class's public interface.
+    params and rng are populated from SimulationConfig by
+    Simulation.from_config() (S-11) — the defaults here (empty dict,
+    unseeded RNG) only apply when a SimulationModel is constructed
+    directly, e.g. in tests. log_event's actual event storage is still
+    a stub (plain list, no real persistence) pending S-09 (Data
+    Collection) — replace that internal without needing to change this
+    class's public interface.
     """
 
     def __init__(self, params: dict[str, Any] | None = None, seed: int | None = None, rng: np.random.Generator | None = None):

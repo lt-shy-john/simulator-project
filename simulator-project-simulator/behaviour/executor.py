@@ -38,6 +38,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Union
+import logging
 import sys
 
 from runner.soa import to_soa, ID_KEY
@@ -50,6 +51,8 @@ from scheduler.scheduler import ScheduleConfig, resolve_step_agents, consume_lif
 from lifecycle.lifecycle import apply_pending_lifecycle_events
 from stopping.engine import check_stopping, StopResult, StoppingConfig
 from util.collector import collect_aggregates
+
+logger = logging.getLogger("simulator")
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +205,16 @@ def run_step(
                 entry.instance.apply(agent, neighbours, accessor, model)
             else:
                 neighbours_state = [read_source[nid].state for nid in neighbours]
+                before = dict(agent.state)
                 evaluate_expression(entry.expr, agent, neighbours_state)
+                changed = {
+                    k: (before[k], v) for k, v in agent.state.items() if before[k] != v
+                }
+                if changed:
+                    logger.info(  # TODO: drop to logger.debug once S-0x logging levels land
+                        "[step=%s] rule triggered agent=%s expr=%r changed=%s",
+                        model.step, agent.agent_id, entry.expr, changed,
+                    )
         consume_lifetime_action(schedule, agent)
 
     apply_deferred_writes(live_population, deferred_writes)

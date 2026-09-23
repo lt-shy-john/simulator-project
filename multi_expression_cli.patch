@@ -1,0 +1,145 @@
+diff --git a/simulator-project-simulator/runner/commands.py b/simulator-project-simulator/runner/commands.py
+index e041c8c..ee2c920 100644
+--- a/simulator-project-simulator/runner/commands.py
++++ b/simulator-project-simulator/runner/commands.py
+@@ -109,8 +109,9 @@ def do_setting():
+       - exactly one agent type, always generation_mode="heterogeneous"
+         (every attribute is distribution-driven; homogeneous/fixed-value
+         agent types aren't reachable through this prompt flow yet)
+-      - exactly one topology, one behaviour (a single expression, not a
+-        registered module — module params aren't prompt-able generically)
++      - exactly one topology; behaviours are one or more expressions
++        against that single topology (not registered modules — module
++        params aren't prompt-able generically)
+       - no extra stopping conditions beyond max_steps (T, already
+         collected at startup)
+     On a validation error, the whole flow is discarded — run 'setting'
+@@ -139,7 +140,7 @@ def do_setting():
+             break
+ 
+     topology_name, topology = _prompt_topology(agent_type_name)
+-    behaviour_entry = _prompt_behaviour(topology_name)
++    behaviour_entries = _prompt_behaviour(topology_name)
+     scheduler = _prompt_scheduler()
+ 
+     config = {
+@@ -153,7 +154,7 @@ def do_setting():
+             }
+         ],
+         "topologies": {topology_name: topology},
+-        "behaviours": {agent_type_name: [behaviour_entry]},
++        "behaviours": {agent_type_name: behaviour_entries},
+         "scheduler": scheduler,
+         "stopping": {"max_steps": settings["T"], "conditions": [], "combinator": "OR"},
+     }
+@@ -229,16 +230,22 @@ def _prompt_topology(agent_type_name: str) -> tuple[str, dict]:
+         "graph": {"type": "erdos_renyi", "n": settings["N"], "p": p},
+     }
+ 
+-def _prompt_behaviour(topology_name: str) -> dict:
+-    """Prompt for a single expression-based behaviour entry. Module-based
++def _prompt_behaviour(topology_name: str) -> list[dict]:
++    """Prompt for one or more expression-based behaviour entries, applied
++    to each agent, in the order entered, every step. Module-based
+     behaviours aren't offered here — a registered module's constructor
+     params vary per module, so there's no generic prompt for them."""
+     logger.info(
+         "Enter a Python expression to run on each agent each step, "
+         "e.g. state['age'] = 1"
+     )
+-    expression = input("  Expression: ").strip()
+-    return {"expression": expression, "topology_name": topology_name}
++    behaviours = []
++    while True:
++        expression = input("  Expression: ").strip()
++        behaviours.append({"expression": expression, "topology_name": topology_name})
++        if not util.prompt_yes_no("Add another expression? (y/n): "):
++            break
++    return behaviours
+ 
+ def _prompt_scheduler() -> dict:
+     order = util.prompt_choice(
+diff --git a/simulator-project-simulator/tests/runner/test_commands.py b/simulator-project-simulator/tests/runner/test_commands.py
+index 7cd444d..5cb6c60 100644
+--- a/simulator-project-simulator/tests/runner/test_commands.py
++++ b/simulator-project-simulator/tests/runner/test_commands.py
+@@ -45,6 +45,7 @@ class TestDoSetting:
+             "all_pairs",            # topology mode
+             "contact",              # topology name
+             'state["age"] = 1',    # behaviour expression
++            "n",                    # don't add another expression
+             "n",                    # don't customise scheduling
+         ])
+ 
+@@ -57,6 +58,31 @@ class TestDoSetting:
+         assert config["stopping"]["max_steps"] == 3
+         assert config["seed"] == 42
+ 
++    def test_multiple_expressions_are_all_saved_in_order(self, monkeypatch):
++        commands.settings["N"] = 5
++        commands.settings["T"] = 3
++        _run_with_scripted_input(monkeypatch, [
++            "",                      # seed — blank means unseeded
++            "person",
++            "energy", "float", "n", "0", "10",
++            "n",                     # no more attributes
++            "all_pairs",
++            "contact",
++            'state["energy"] += 0.5',
++            "y",                     # add another expression
++            'state["energy"] -= 0.1',
++            "n",                     # no more expressions
++            "n",                     # don't customise scheduling
++        ])
++
++        commands.do_setting()
++
++        behaviours = commands.settings["config"]["behaviours"]["person"]
++        assert [b["expression"] for b in behaviours] == [
++            'state["energy"] += 0.5',
++            'state["energy"] -= 0.1',
++        ]
++
+     def test_prompts_for_n_and_t_if_missing(self, monkeypatch):
+         # No commands.settings["N"]/["T"] pre-set this time.
+         _run_with_scripted_input(monkeypatch, [
+@@ -71,6 +97,7 @@ class TestDoSetting:
+             "all_pairs",
+             "contact",
+             'state["active"] = True',
++            "n",                     # don't add another expression
+             "n",
+         ])
+ 
+@@ -96,6 +123,7 @@ class TestDoSetting:
+             "all_pairs",
+             "contact",
+             'state["age"] = 1',
++            "n",                     # don't add another expression
+             "n",
+         ])
+ 
+@@ -114,6 +142,7 @@ class TestDoSetting:
+             "all_pairs",
+             "contact",
+             'state["wealth"] = 1',
++            "n",              # don't add another expression
+             "y",              # customise scheduling
+             "priority",
+             "wealth",         # priority_attribute
+@@ -137,6 +166,7 @@ class TestDoSetting:
+             "age", "int", "n", "0", "10", "n",
+             "all_pairs", "contact",
+             'state["age"] = 1',
++            "n",                     # don't add another expression
+             "n",
+         ])
+ 
+@@ -158,6 +188,7 @@ class TestDoRun:
+             "person", "age", "int", "n", "0", "10", "n",
+             "all_pairs", "contact",
+             'state["age"] = 1',
++            "n",                     # don't add another expression
+             "n",
+         ])
+         commands.do_setting()

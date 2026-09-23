@@ -45,6 +45,7 @@ class TestDoSetting:
             "all_pairs",            # topology mode
             "contact",              # topology name
             'state["age"] = 1',    # behaviour expression
+            "n",                    # don't add another expression
             "n",                    # don't customise scheduling
         ])
 
@@ -56,6 +57,31 @@ class TestDoSetting:
         assert config["agent_types"][0]["count"] == 5
         assert config["stopping"]["max_steps"] == 3
         assert config["seed"] == 42
+
+    def test_multiple_expressions_are_all_saved_in_order(self, monkeypatch):
+        commands.settings["N"] = 5
+        commands.settings["T"] = 3
+        _run_with_scripted_input(monkeypatch, [
+            "",                      # seed — blank means unseeded
+            "person",
+            "energy", "float", "n", "0", "10",
+            "n",                     # no more attributes
+            "all_pairs",
+            "contact",
+            'state["energy"] += 0.5',
+            "y",                     # add another expression
+            'state["energy"] -= 0.1',
+            "n",                     # no more expressions
+            "n",                     # don't customise scheduling
+        ])
+
+        commands.do_setting()
+
+        behaviours = commands.settings["config"]["behaviours"]["person"]
+        assert [b["expression"] for b in behaviours] == [
+            'state["energy"] += 0.5',
+            'state["energy"] -= 0.1',
+        ]
 
     def test_prompts_for_n_and_t_if_missing(self, monkeypatch):
         # No commands.settings["N"]/["T"] pre-set this time.
@@ -71,6 +97,7 @@ class TestDoSetting:
             "all_pairs",
             "contact",
             'state["active"] = True',
+            "n",                     # don't add another expression
             "n",
         ])
 
@@ -96,6 +123,7 @@ class TestDoSetting:
             "all_pairs",
             "contact",
             'state["age"] = 1',
+            "n",                     # don't add another expression
             "n",
         ])
 
@@ -114,6 +142,7 @@ class TestDoSetting:
             "all_pairs",
             "contact",
             'state["wealth"] = 1',
+            "n",              # don't add another expression
             "y",              # customise scheduling
             "priority",
             "wealth",         # priority_attribute
@@ -137,6 +166,7 @@ class TestDoSetting:
             "age", "int", "n", "0", "10", "n",
             "all_pairs", "contact",
             'state["age"] = 1',
+            "n",                     # don't add another expression
             "n",
         ])
 
@@ -158,6 +188,7 @@ class TestDoRun:
             "person", "age", "int", "n", "0", "10", "n",
             "all_pairs", "contact",
             'state["age"] = 1',
+            "n",                     # don't add another expression
             "n",
         ])
         commands.do_setting()

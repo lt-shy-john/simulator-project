@@ -109,8 +109,9 @@ def do_setting():
       - exactly one agent type, always generation_mode="heterogeneous"
         (every attribute is distribution-driven; homogeneous/fixed-value
         agent types aren't reachable through this prompt flow yet)
-      - exactly one topology, one behaviour (a single expression, not a
-        registered module — module params aren't prompt-able generically)
+      - exactly one topology; behaviours are one or more expressions
+        against that single topology (not registered modules — module
+        params aren't prompt-able generically)
       - no extra stopping conditions beyond max_steps (T, already
         collected at startup)
     On a validation error, the whole flow is discarded — run 'setting'
@@ -139,7 +140,7 @@ def do_setting():
             break
 
     topology_name, topology = _prompt_topology(agent_type_name)
-    behaviour_entry = _prompt_behaviour(topology_name)
+    behaviour_entries = _prompt_behaviour(topology_name)
     scheduler = _prompt_scheduler()
 
     config = {
@@ -153,7 +154,7 @@ def do_setting():
             }
         ],
         "topologies": {topology_name: topology},
-        "behaviours": {agent_type_name: [behaviour_entry]},
+        "behaviours": {agent_type_name: behaviour_entries},
         "scheduler": scheduler,
         "stopping": {"max_steps": settings["T"], "conditions": [], "combinator": "OR"},
     }
@@ -229,16 +230,22 @@ def _prompt_topology(agent_type_name: str) -> tuple[str, dict]:
         "graph": {"type": "erdos_renyi", "n": settings["N"], "p": p},
     }
 
-def _prompt_behaviour(topology_name: str) -> dict:
-    """Prompt for a single expression-based behaviour entry. Module-based
+def _prompt_behaviour(topology_name: str) -> list[dict]:
+    """Prompt for one or more expression-based behaviour entries, applied
+    to each agent, in the order entered, every step. Module-based
     behaviours aren't offered here — a registered module's constructor
     params vary per module, so there's no generic prompt for them."""
     logger.info(
         "Enter a Python expression to run on each agent each step, "
         "e.g. state['age'] = 1"
     )
-    expression = input("  Expression: ").strip()
-    return {"expression": expression, "topology_name": topology_name}
+    behaviours = []
+    while True:
+        expression = input("  Expression: ").strip()
+        behaviours.append({"expression": expression, "topology_name": topology_name})
+        if not util.prompt_yes_no("Add another expression? (y/n): "):
+            break
+    return behaviours
 
 def _prompt_scheduler() -> dict:
     order = util.prompt_choice(

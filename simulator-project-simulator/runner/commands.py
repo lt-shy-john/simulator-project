@@ -96,9 +96,9 @@ def do_run_default():
     current_run()
 
 def do_setting():
-    """Interactively build a full simulation config (agent type,
-    attributes, topology, behaviour, scheduler, stopping) and validate
-    it against SimulationConfig.
+    """Interactively build a full simulation config
+    (agent type, attributes, topology, behaviour, scheduler, stopping)
+    and validate it against SimulationConfig.
 
     Scope for this MVP flow — each is a deliberate simplification, not
     a schema limitation (the underlying config supports more):

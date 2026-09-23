@@ -114,6 +114,12 @@ def do_setting():
         params aren't prompt-able generically)
       - no extra stopping conditions beyond max_steps (T, already
         collected at startup)
+    If settings["config"] already exists from a previous 'setting' run,
+    you're offered the option to reuse its agent type name and
+    attributes as-is instead of re-entering them — handy for iterating
+    on topology/behaviour/scheduler without retyping the agent setup
+    each time. Everything else (topology, behaviour, scheduler) is
+    always re-prompted fresh.
     On a validation error, the whole flow is discarded — run 'setting'
     again from scratch rather than being re-prompted just for the
     offending field.
@@ -130,14 +136,7 @@ def do_setting():
     )
     seed = util.prompt_optional_int("Seed [blank for none]: ")
 
-    agent_type_name = input("Agent type name [agent]: ").strip() or "agent"
-
-    attributes = []
-    logger.info(f"Now define attributes for '{agent_type_name}'.")
-    while True:
-        attributes.append(_prompt_attribute())
-        if not util.prompt_yes_no("Add another attribute? (y/n): "):
-            break
+    agent_type_name, attributes = _prompt_agent_type()
 
     topology_name, topology = _prompt_topology(agent_type_name)
     behaviour_entries = _prompt_behaviour(topology_name)
@@ -167,6 +166,34 @@ def do_setting():
 
     settings["config"] = config
     logger.info("Configuration saved. Run 'run' to start the simulation.")
+
+def _prompt_agent_type() -> tuple[str, list[dict]]:
+    """Return (agent_type_name, attributes) for the config being built.
+
+    If settings["config"] already has an agent type from a previous
+    'setting' run, offers to reuse its name and attributes as-is rather
+    than re-prompting for them. Declining, or no existing config, falls
+    through to the normal from-scratch prompt.
+    """
+    existing_config = settings.get("config")
+    if existing_config is not None:
+        existing_agent_type = existing_config["agent_types"][0]
+        if util.prompt_yes_no(
+            f"Reuse existing agent type '{existing_agent_type['name']}' "
+            f"and its {len(existing_agent_type['attributes'])} attribute(s)? (y/n): "
+        ):
+            return existing_agent_type["name"], existing_agent_type["attributes"]
+
+    agent_type_name = input("Agent type name [agent]: ").strip() or "agent"
+
+    attributes = []
+    logger.info(f"Now define attributes for '{agent_type_name}'.")
+    while True:
+        attributes.append(_prompt_attribute())
+        if not util.prompt_yes_no("Add another attribute? (y/n): "):
+            break
+
+    return agent_type_name, attributes
 
 def _prompt_attribute() -> dict:
     """Prompt for one AttributeDefinition-shaped dict: name, type, and a

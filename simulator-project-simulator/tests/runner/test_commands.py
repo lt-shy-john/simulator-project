@@ -58,6 +58,76 @@ class TestDoSetting:
         assert config["stopping"]["max_steps"] == 3
         assert config["seed"] == 42
 
+    def test_reuse_existing_agent_type_skips_reprompt(self, monkeypatch):
+        commands.settings["N"] = 5
+        commands.settings["T"] = 3
+        # First pass — builds an initial config with 'person'/'energy'.
+        _run_with_scripted_input(monkeypatch, [
+            "",
+            "person",
+            "energy", "float", "n", "0", "10",
+            "n",
+            "all_pairs",
+            "contact",
+            'state["energy"] += 0.5',
+            "n",
+            "n",
+        ])
+        commands.do_setting()
+
+        # Second pass — reuse the agent type/attributes, only re-answer
+        # topology/behaviour/scheduler. No attribute-loop inputs needed.
+        _run_with_scripted_input(monkeypatch, [
+            "",                      # seed
+            "y",                     # reuse existing agent type
+            "random_sample",
+            "contact2",
+            "3",                     # k
+            'state["energy"] -= 1',
+            "n",
+            "n",
+        ])
+        commands.do_setting()
+
+        config = commands.settings["config"]
+        assert config["agent_types"][0]["name"] == "person"
+        assert [a["name"] for a in config["agent_types"][0]["attributes"]] == ["energy"]
+        assert "contact2" in config["topologies"]
+
+    def test_decline_reuse_reprompts_for_agent_type(self, monkeypatch):
+        commands.settings["N"] = 5
+        commands.settings["T"] = 3
+        _run_with_scripted_input(monkeypatch, [
+            "",
+            "person",
+            "energy", "float", "n", "0", "10",
+            "n",
+            "all_pairs",
+            "contact",
+            'state["energy"] += 0.5',
+            "n",
+            "n",
+        ])
+        commands.do_setting()
+
+        _run_with_scripted_input(monkeypatch, [
+            "",                      # seed
+            "n",                     # decline reuse
+            "predator",              # new agent type name
+            "hunger", "float", "n", "0", "5",
+            "n",
+            "all_pairs",
+            "contact",
+            'state["hunger"] += 1',
+            "n",
+            "n",
+        ])
+        commands.do_setting()
+
+        config = commands.settings["config"]
+        assert config["agent_types"][0]["name"] == "predator"
+        assert [a["name"] for a in config["agent_types"][0]["attributes"]] == ["hunger"]
+
     def test_multiple_expressions_are_all_saved_in_order(self, monkeypatch):
         commands.settings["N"] = 5
         commands.settings["T"] = 3

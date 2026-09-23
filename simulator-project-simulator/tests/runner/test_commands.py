@@ -45,6 +45,7 @@ class TestDoSetting:
             "all_pairs",            # topology mode
             "contact",              # topology name
             'state["age"] = 1',    # behaviour expression
+            "n",                    # don't add another expression
             "n",                    # don't customise scheduling
         ])
 
@@ -56,6 +57,208 @@ class TestDoSetting:
         assert config["agent_types"][0]["count"] == 5
         assert config["stopping"]["max_steps"] == 3
         assert config["seed"] == 42
+
+    def test_reuse_existing_agent_type_skips_reprompt(self, monkeypatch):
+        commands.settings["N"] = 5
+        commands.settings["T"] = 3
+        # First pass — builds an initial config with 'person'/'energy'.
+        _run_with_scripted_input(monkeypatch, [
+            "",
+            "person",
+            "energy", "float", "n", "0", "10",
+            "n",
+            "all_pairs",
+            "contact",
+            'state["energy"] += 0.5',
+            "n",
+            "n",
+        ])
+        commands.do_setting()
+
+        # Second pass — reuse the agent type/attributes, decline reuse for
+        # topology/behaviour/scheduler and re-answer those fresh instead.
+        # No attribute-loop inputs needed.
+        _run_with_scripted_input(monkeypatch, [
+            "",                      # seed
+            "y",                     # reuse existing agent type
+            "n",                     # decline topology reuse
+            "random_sample",
+            "contact2",
+            "3",                     # k
+            "n",                     # decline behaviour reuse
+            'state["energy"] -= 1',
+            "n",                     # no more expressions
+            "n",                     # decline scheduler reuse
+            "n",                     # don't customise scheduling
+        ])
+        commands.do_setting()
+
+        config = commands.settings["config"]
+        assert config["agent_types"][0]["name"] == "person"
+        assert [a["name"] for a in config["agent_types"][0]["attributes"]] == ["energy"]
+        assert "contact2" in config["topologies"]
+
+    def test_decline_reuse_reprompts_for_agent_type(self, monkeypatch):
+        commands.settings["N"] = 5
+        commands.settings["T"] = 3
+        _run_with_scripted_input(monkeypatch, [
+            "",
+            "person",
+            "energy", "float", "n", "0", "10",
+            "n",
+            "all_pairs",
+            "contact",
+            'state["energy"] += 0.5',
+            "n",
+            "n",
+        ])
+        commands.do_setting()
+
+        # New agent type name ('predator') means the previous behaviours
+        # dict (keyed by 'person') has no matching entry, so the
+        # behaviour-reuse prompt doesn't even appear here — see
+        # test_reuse_existing_behaviour_skips_reprompt for that path.
+        _run_with_scripted_input(monkeypatch, [
+            "",                      # seed
+            "n",                     # decline agent-type reuse
+            "predator",              # new agent type name
+            "hunger", "float", "n", "0", "5",
+            "n",                     # no more attributes
+            "n",                     # decline topology reuse
+            "all_pairs",
+            "contact",
+            'state["hunger"] += 1',
+            "n",                     # no more expressions
+            "n",                     # decline scheduler reuse
+            "n",                     # don't customise scheduling
+        ])
+        commands.do_setting()
+
+        config = commands.settings["config"]
+        assert config["agent_types"][0]["name"] == "predator"
+        assert [a["name"] for a in config["agent_types"][0]["attributes"]] == ["hunger"]
+
+    def test_reuse_existing_topology_skips_reprompt(self, monkeypatch):
+        commands.settings["N"] = 5
+        commands.settings["T"] = 3
+        _run_with_scripted_input(monkeypatch, [
+            "",
+            "person",
+            "energy", "float", "n", "0", "10",
+            "n",
+            "all_pairs",
+            "contact",
+            'state["energy"] += 0.5',
+            "n",
+            "n",
+        ])
+        commands.do_setting()
+
+        _run_with_scripted_input(monkeypatch, [
+            "",                      # seed
+            "y",                     # reuse agent type
+            "y",                     # reuse topology — no mode/name prompts
+            "n",                     # decline behaviour reuse
+            'state["energy"] -= 1',
+            "n",                     # no more expressions
+            "n",                     # decline scheduler reuse
+            "n",                     # don't customise scheduling
+        ])
+        commands.do_setting()
+
+        config = commands.settings["config"]
+        assert config["topologies"]["contact"]["mode"] == "all_pairs"
+        assert config["topologies"]["contact"]["agent_types"] == ["person"]
+
+    def test_reuse_existing_behaviour_skips_reprompt(self, monkeypatch):
+        commands.settings["N"] = 5
+        commands.settings["T"] = 3
+        _run_with_scripted_input(monkeypatch, [
+            "",
+            "person",
+            "energy", "float", "n", "0", "10",
+            "n",
+            "all_pairs",
+            "contact",
+            'state["energy"] += 0.5',
+            "y",                     # add a second expression
+            'state["energy"] -= 0.1',
+            "n",
+            "n",
+        ])
+        commands.do_setting()
+
+        _run_with_scripted_input(monkeypatch, [
+            "",                      # seed
+            "y",                     # reuse agent type
+            "y",                     # reuse topology
+            "y",                     # reuse behaviour expressions — no expr prompts
+            "n",                     # decline scheduler reuse
+            "n",                     # don't customise scheduling
+        ])
+        commands.do_setting()
+
+        config = commands.settings["config"]
+        assert [b["expression"] for b in config["behaviours"]["person"]] == [
+            'state["energy"] += 0.5',
+            'state["energy"] -= 0.1',
+        ]
+
+    def test_reuse_existing_scheduler_skips_reprompt(self, monkeypatch):
+        commands.settings["N"] = 3
+        commands.settings["T"] = 1
+        _run_with_scripted_input(monkeypatch, [
+            "7",                     # seed
+            "person",
+            "wealth", "float", "n", "0", "1000",
+            "n",
+            "all_pairs",
+            "contact",
+            'state["wealth"] = 1',
+            "n",
+            "y",                     # customise scheduling
+            "priority",
+            "wealth",                # priority_attribute
+        ])
+        commands.do_setting()
+
+        _run_with_scripted_input(monkeypatch, [
+            "",                      # seed
+            "y",                     # reuse agent type
+            "y",                     # reuse topology
+            "y",                     # reuse behaviour
+            "y",                     # reuse scheduler — no order/attr prompts
+        ])
+        commands.do_setting()
+
+        config = commands.settings["config"]
+        assert config["scheduler"]["order"] == "priority"
+        assert config["scheduler"]["priority_attribute"] == "wealth"
+
+    def test_multiple_expressions_are_all_saved_in_order(self, monkeypatch):
+        commands.settings["N"] = 5
+        commands.settings["T"] = 3
+        _run_with_scripted_input(monkeypatch, [
+            "",                      # seed — blank means unseeded
+            "person",
+            "energy", "float", "n", "0", "10",
+            "n",                     # no more attributes
+            "all_pairs",
+            "contact",
+            'state["energy"] += 0.5',
+            "y",                     # add another expression
+            'state["energy"] -= 0.1',
+            "n",                     # no more expressions
+            "n",                     # don't customise scheduling
+        ])
+
+        commands.do_setting()
+
+        behaviours = commands.settings["config"]["behaviours"]["person"]
+        assert [b["expression"] for b in behaviours] == [
+            'state["energy"] += 0.5',
+            'state["energy"] -= 0.1',
+        ]
 
     def test_prompts_for_n_and_t_if_missing(self, monkeypatch):
         # No commands.settings["N"]/["T"] pre-set this time.
@@ -71,6 +274,7 @@ class TestDoSetting:
             "all_pairs",
             "contact",
             'state["active"] = True',
+            "n",                     # don't add another expression
             "n",
         ])
 
@@ -96,6 +300,7 @@ class TestDoSetting:
             "all_pairs",
             "contact",
             'state["age"] = 1',
+            "n",                     # don't add another expression
             "n",
         ])
 
@@ -114,6 +319,7 @@ class TestDoSetting:
             "all_pairs",
             "contact",
             'state["wealth"] = 1',
+            "n",              # don't add another expression
             "y",              # customise scheduling
             "priority",
             "wealth",         # priority_attribute
@@ -137,6 +343,7 @@ class TestDoSetting:
             "age", "int", "n", "0", "10", "n",
             "all_pairs", "contact",
             'state["age"] = 1',
+            "n",                     # don't add another expression
             "n",
         ])
 
@@ -158,6 +365,7 @@ class TestDoRun:
             "person", "age", "int", "n", "0", "10", "n",
             "all_pairs", "contact",
             'state["age"] = 1',
+            "n",                     # don't add another expression
             "n",
         ])
         commands.do_setting()

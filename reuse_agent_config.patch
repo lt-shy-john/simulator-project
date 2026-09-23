@@ -1,0 +1,149 @@
+diff --git a/simulator-project-simulator/runner/commands.py b/simulator-project-simulator/runner/commands.py
+index ee2c920..8a660bd 100644
+--- a/simulator-project-simulator/runner/commands.py
++++ b/simulator-project-simulator/runner/commands.py
+@@ -114,6 +114,12 @@ def do_setting():
+         params aren't prompt-able generically)
+       - no extra stopping conditions beyond max_steps (T, already
+         collected at startup)
++    If settings["config"] already exists from a previous 'setting' run,
++    you're offered the option to reuse its agent type name and
++    attributes as-is instead of re-entering them — handy for iterating
++    on topology/behaviour/scheduler without retyping the agent setup
++    each time. Everything else (topology, behaviour, scheduler) is
++    always re-prompted fresh.
+     On a validation error, the whole flow is discarded — run 'setting'
+     again from scratch rather than being re-prompted just for the
+     offending field.
+@@ -130,14 +136,7 @@ def do_setting():
+     )
+     seed = util.prompt_optional_int("Seed [blank for none]: ")
+ 
+-    agent_type_name = input("Agent type name [agent]: ").strip() or "agent"
+-
+-    attributes = []
+-    logger.info(f"Now define attributes for '{agent_type_name}'.")
+-    while True:
+-        attributes.append(_prompt_attribute())
+-        if not util.prompt_yes_no("Add another attribute? (y/n): "):
+-            break
++    agent_type_name, attributes = _prompt_agent_type()
+ 
+     topology_name, topology = _prompt_topology(agent_type_name)
+     behaviour_entries = _prompt_behaviour(topology_name)
+@@ -168,6 +167,34 @@ def do_setting():
+     settings["config"] = config
+     logger.info("Configuration saved. Run 'run' to start the simulation.")
+ 
++def _prompt_agent_type() -> tuple[str, list[dict]]:
++    """Return (agent_type_name, attributes) for the config being built.
++
++    If settings["config"] already has an agent type from a previous
++    'setting' run, offers to reuse its name and attributes as-is rather
++    than re-prompting for them. Declining, or no existing config, falls
++    through to the normal from-scratch prompt.
++    """
++    existing_config = settings.get("config")
++    if existing_config is not None:
++        existing_agent_type = existing_config["agent_types"][0]
++        if util.prompt_yes_no(
++            f"Reuse existing agent type '{existing_agent_type['name']}' "
++            f"and its {len(existing_agent_type['attributes'])} attribute(s)? (y/n): "
++        ):
++            return existing_agent_type["name"], existing_agent_type["attributes"]
++
++    agent_type_name = input("Agent type name [agent]: ").strip() or "agent"
++
++    attributes = []
++    logger.info(f"Now define attributes for '{agent_type_name}'.")
++    while True:
++        attributes.append(_prompt_attribute())
++        if not util.prompt_yes_no("Add another attribute? (y/n): "):
++            break
++
++    return agent_type_name, attributes
++
+ def _prompt_attribute() -> dict:
+     """Prompt for one AttributeDefinition-shaped dict: name, type, and a
+     matching distribution. Always population_method='distribution', to
+diff --git a/simulator-project-simulator/tests/runner/test_commands.py b/simulator-project-simulator/tests/runner/test_commands.py
+index 5cb6c60..e22ecde 100644
+--- a/simulator-project-simulator/tests/runner/test_commands.py
++++ b/simulator-project-simulator/tests/runner/test_commands.py
+@@ -58,6 +58,76 @@ class TestDoSetting:
+         assert config["stopping"]["max_steps"] == 3
+         assert config["seed"] == 42
+ 
++    def test_reuse_existing_agent_type_skips_reprompt(self, monkeypatch):
++        commands.settings["N"] = 5
++        commands.settings["T"] = 3
++        # First pass — builds an initial config with 'person'/'energy'.
++        _run_with_scripted_input(monkeypatch, [
++            "",
++            "person",
++            "energy", "float", "n", "0", "10",
++            "n",
++            "all_pairs",
++            "contact",
++            'state["energy"] += 0.5',
++            "n",
++            "n",
++        ])
++        commands.do_setting()
++
++        # Second pass — reuse the agent type/attributes, only re-answer
++        # topology/behaviour/scheduler. No attribute-loop inputs needed.
++        _run_with_scripted_input(monkeypatch, [
++            "",                      # seed
++            "y",                     # reuse existing agent type
++            "random_sample",
++            "contact2",
++            "3",                     # k
++            'state["energy"] -= 1',
++            "n",
++            "n",
++        ])
++        commands.do_setting()
++
++        config = commands.settings["config"]
++        assert config["agent_types"][0]["name"] == "person"
++        assert [a["name"] for a in config["agent_types"][0]["attributes"]] == ["energy"]
++        assert "contact2" in config["topologies"]
++
++    def test_decline_reuse_reprompts_for_agent_type(self, monkeypatch):
++        commands.settings["N"] = 5
++        commands.settings["T"] = 3
++        _run_with_scripted_input(monkeypatch, [
++            "",
++            "person",
++            "energy", "float", "n", "0", "10",
++            "n",
++            "all_pairs",
++            "contact",
++            'state["energy"] += 0.5',
++            "n",
++            "n",
++        ])
++        commands.do_setting()
++
++        _run_with_scripted_input(monkeypatch, [
++            "",                      # seed
++            "n",                     # decline reuse
++            "predator",              # new agent type name
++            "hunger", "float", "n", "0", "5",
++            "n",
++            "all_pairs",
++            "contact",
++            'state["hunger"] += 1',
++            "n",
++            "n",
++        ])
++        commands.do_setting()
++
++        config = commands.settings["config"]
++        assert config["agent_types"][0]["name"] == "predator"
++        assert [a["name"] for a in config["agent_types"][0]["attributes"]] == ["hunger"]
++
+     def test_multiple_expressions_are_all_saved_in_order(self, monkeypatch):
+         commands.settings["N"] = 5
+         commands.settings["T"] = 3

@@ -30,10 +30,13 @@ Design notes:
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
+import logging
 import time
 import numpy as np
 
 from runner.state import AgentState
+
+logger = logging.getLogger("simulator")
 
 
 @runtime_checkable
@@ -217,19 +220,28 @@ class SimulationModel:
         return sum(a.get(attr) for a in matching)
 
     def log_event(self, event_type: str, agent_id: str | None, data: dict[str, Any] | None = None) -> None:
-        """Append a structured event record to the in-memory event log.
+        """Append a structured event record to the in-memory event log,
+        and emit it through the shared 'simulator' logger (INFO level)
+        so it shows up on stdout / the run's log file.
 
-        No file/stdout output happens here - that's out of scope for this
-        ticket (see Event Log Memory Management placeholder). This just
-        appends to self._event_log.
+        Real persistence of the in-memory log (self._event_log) is a
+        separate, still-stubbed concern - see Event Log Memory
+        Management placeholder, pending S-09 (Data Collection).
         """
-        self._event_log.append({
+        record = {
             "step": self.step,
             "event_type": event_type,
             "agent_id": agent_id,
             "timestamp_ms": int(time.time() * 1000),
             "data": data if data is not None else {},
-        })
+        }
+        self._event_log.append(record)
+
+        agent_part = f" agent={agent_id}" if agent_id is not None else ""
+        data_part = f" data={record['data']}" if record["data"] else ""
+        logger.info(
+            "[step=%s] %s%s%s", self.step, event_type, agent_part, data_part
+        )
 
     def get_events(self, event_types: list[str] | None = None) -> list[dict[str, Any]]:
         """Return logged events, optionally filtered to the given types

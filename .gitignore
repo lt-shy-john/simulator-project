@@ -1,6 +1,8 @@
 .idea
 .vs
 
+*.patch
+
 # dependencies
 frontend/node_modules
 

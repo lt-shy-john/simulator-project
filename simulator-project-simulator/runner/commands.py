@@ -115,11 +115,10 @@ def do_setting():
       - no extra stopping conditions beyond max_steps (T, already
         collected at startup)
     If settings["config"] already exists from a previous 'setting' run,
-    you're offered the option to reuse its agent type name and
-    attributes as-is instead of re-entering them — handy for iterating
-    on topology/behaviour/scheduler without retyping the agent setup
-    each time. Everything else (topology, behaviour, scheduler) is
-    always re-prompted fresh.
+    each section — agent type/attributes, topology, behaviour
+    expressions, and scheduler — independently offers to reuse its
+    previous value instead of re-entering it, handy for iterating on
+    just one part of the config without retyping the rest.
     On a validation error, the whole flow is discarded — run 'setting'
     again from scratch rather than being re-prompted just for the
     offending field.
@@ -139,7 +138,7 @@ def do_setting():
     agent_type_name, attributes = _prompt_agent_type()
 
     topology_name, topology = _prompt_topology(agent_type_name)
-    behaviour_entries = _prompt_behaviour(topology_name)
+    behaviour_entries = _prompt_behaviour(agent_type_name, topology_name)
     scheduler = _prompt_scheduler()
 
     config = {
@@ -235,7 +234,24 @@ def _prompt_attribute() -> dict:
     }
 
 def _prompt_topology(agent_type_name: str) -> tuple[str, dict]:
-    """Prompt for a single topology. Returns (name, config-dict)."""
+    """Prompt for a single topology, or reuse the one from an existing
+    config if available. Returns (name, config-dict).
+
+    A reused topology has its agent_types field rewritten to
+    [agent_type_name] — needed in case agent-type reuse was declined
+    and a different name is now in play.
+    """
+    existing_config = settings.get("config")
+    if existing_config is not None:
+        existing_name, existing_topology = next(iter(existing_config["topologies"].items()))
+        if util.prompt_yes_no(
+            f"Reuse existing topology '{existing_name}' "
+            f"(mode={existing_topology['mode']})? (y/n): "
+        ):
+            reused = dict(existing_topology)
+            reused["agent_types"] = [agent_type_name]
+            return existing_name, reused
+
     mode = util.prompt_choice(
         "Topology mode (all_pairs/random_sample/network): ",
         ["all_pairs", "random_sample", "network"],
@@ -257,11 +273,30 @@ def _prompt_topology(agent_type_name: str) -> tuple[str, dict]:
         "graph": {"type": "erdos_renyi", "n": settings["N"], "p": p},
     }
 
-def _prompt_behaviour(topology_name: str) -> list[dict]:
+def _prompt_behaviour(agent_type_name: str, topology_name: str) -> list[dict]:
     """Prompt for one or more expression-based behaviour entries, applied
-    to each agent, in the order entered, every step. Module-based
+    to each agent, in the order entered, every step — or reuse the
+    previous expressions for this agent type if available. Module-based
     behaviours aren't offered here — a registered module's constructor
-    params vary per module, so there's no generic prompt for them."""
+    params vary per module, so there's no generic prompt for them.
+
+    Reused entries have their topology_name rewritten to topology_name —
+    the current topology (freshly chosen or itself reused), so a
+    behaviour reuse can't end up pointing at a topology that no longer
+    exists in this config.
+    """
+    existing_config = settings.get("config")
+    if existing_config is not None:
+        existing_entries = existing_config.get("behaviours", {}).get(agent_type_name)
+        if existing_entries and util.prompt_yes_no(
+            f"Reuse existing {len(existing_entries)} expression(s) for "
+            f"'{agent_type_name}'? (y/n): "
+        ):
+            return [
+                {"expression": entry["expression"], "topology_name": topology_name}
+                for entry in existing_entries
+            ]
+
     logger.info(
         "Enter a Python expression to run on each agent each step, "
         "e.g. state['age'] = 1"
@@ -275,6 +310,15 @@ def _prompt_behaviour(topology_name: str) -> list[dict]:
     return behaviours
 
 def _prompt_scheduler() -> dict:
+    existing_config = settings.get("config")
+    if existing_config is not None:
+        existing_scheduler = existing_config.get("scheduler")
+        if existing_scheduler and util.prompt_yes_no(
+            f"Reuse existing scheduler settings (order="
+            f"{existing_scheduler['order']})? (y/n): "
+        ):
+            return dict(existing_scheduler)
+
     order = util.prompt_choice(
         "Scheduling order (all_at_once/random/priority) [all_at_once]: ",
         ["all_at_once", "random", "priority"],

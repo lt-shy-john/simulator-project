@@ -235,7 +235,7 @@ def _prompt_behaviour(topology_name: str) -> dict:
     params vary per module, so there's no generic prompt for them."""
     logger.info(
         "Enter a Python expression to run on each agent each step, "
-        "e.g. state[\"age\"] = 1"
+        "e.g. state['age'] = 1"
     )
     expression = input("  Expression: ").strip()
     return {"expression": expression, "topology_name": topology_name}

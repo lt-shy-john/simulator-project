@@ -6,6 +6,7 @@ from typing import Any
 from behaviour.expressions import evaluate_expression
 from behaviour.condition import _evaluate_condition
 from runner.state import AgentState
+from stopping.expression import evaluate_condition
 
 def test_evaluate_expression_success(sample_agents_dict):
     cmd_ls = ['state["energy"] -= 1', 'state["energy"] += 1', 'state["energy"] *= 3', 'state["energy"] /= 2', 'state["energy"] = 2.1']
@@ -174,3 +175,50 @@ def test_non_bool_ternary_result_rejected() -> None:
     """A ternary that yields a non-bool is rejected, like any other condition."""
     with pytest.raises(ValueError):
         _evaluate_condition("'a' if True else 'b'", make_agent(age=1))
+
+class FakeModel:
+    """Minimal stand-in for the model object passed to S-10 conditions."""
+
+    def __init__(self, counts: dict[str, int]) -> None:
+        """Store canned ``count`` results.
+
+        Args:
+            counts: Mapping of count-expression -> number of matching agents.
+        """
+        self._counts = counts
+
+    def count(self, expr: str) -> int:
+        """Return the canned count for ``expr`` (0 if unknown).
+
+        Args:
+            expr: The agent-selection expression, e.g. ``"status==I"``.
+
+        Returns:
+            The number of agents matching ``expr``.
+        """
+        return self._counts.get(expr, 0)
+
+
+def test_ternary_with_model_count_true_branch() -> None:
+    """A ternary whose test uses model.count() takes the body when the test holds."""
+    model = FakeModel({"status==I": 0, "status==S": 5})
+    expr = 'True if model.count("status==I") == 0 else model.count("status==S") == 0'
+    assert evaluate_condition(expr, model) is True
+
+
+def test_ternary_with_model_count_false_branch() -> None:
+    """The orelse branch is taken when the count-based test fails."""
+    model = FakeModel({"status==I": 3, "status==S": 0})
+    expr = 'False if model.count("status==I") == 0 else model.count("status==S") == 0'
+    assert evaluate_condition(expr, model) is True
+
+
+def test_nested_ternary_with_model_count() -> None:
+    """Nested ternaries can chain several model.count() checks."""
+    model = FakeModel({"status==I": 2, "status==E": 0})
+    expr = (
+        'False if model.count("status==I") == 0 '
+        'else True if model.count("status==E") == 0 else False'
+    )
+    assert evaluate_condition(expr, model) is True
+

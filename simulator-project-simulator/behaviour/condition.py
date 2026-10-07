@@ -28,32 +28,43 @@ Design notes:
 from __future__ import annotations
 
 from simpleeval import EvalWithCompoundTypes, InvalidExpression
+from typing import Any, Callable, Sequence
 
 from runner.state import AgentState
 from behaviour.expressions import _SAFE_FUNCTIONS
 
 
-def _evaluate_condition(expr: str, agent: AgentState) -> bool:
+def _evaluate_condition(
+    expr: str,
+    agent: AgentState,
+    neighbours: Sequence[AgentState] | None = None,
+    extra_functions: dict[str, Callable[..., Any]] | None = None,
+) -> bool:
     """Evaluate a bare boolean condition against one agent's state.
 
     Args:
         expr: a safe expression string, e.g. "state['infected'] == True"
-            or "state['energy'] > 10". No assignment — this is a pure
-            boolean test, nothing is mutated.
-        agent: the agent to test the condition against
+            or "state['energy'] > 10". No assignment; nothing is mutated.
+        agent: the agent to test the condition against.
+        neighbours: optional neighbour snapshots. When given, the name
+            `neighbours` (a list of state dicts) is available in expr.
+        extra_functions: optional extra whitelisted callables, e.g. the
+            neighbour helpers bound to `neighbours`.
 
     Returns:
         the boolean result of evaluating expr
 
     Raises:
-        ValueError: if expr fails to evaluate safely (undefined names,
-            disallowed operations, syntax errors), or if the result
+        ValueError: if expr fails to evaluate safely, or if the result
             isn't a bool
     """
-    context = {"state": dict(agent.state)}
+    context: dict[str, Any] = {"state": dict(agent.state)}
+    if neighbours is not None:
+        context["neighbours"] = [a.state for a in neighbours]
+    functions = {**_SAFE_FUNCTIONS, **(extra_functions or {})}
 
     try:
-        evaluator = EvalWithCompoundTypes(names=context, functions=_SAFE_FUNCTIONS)
+        evaluator = EvalWithCompoundTypes(names=context, functions=functions)
         result = evaluator.eval(expr)
     except InvalidExpression as e:
         raise ValueError(f"Condition '{expr}' failed to evaluate safely: {e}") from e

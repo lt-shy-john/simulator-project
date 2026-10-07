@@ -46,9 +46,12 @@ from __future__ import annotations
 import re
 from typing import Any, Callable
 
+import ast
+from functools import lru_cache
 from simpleeval import EvalWithCompoundTypes, InvalidExpression
 
-from behaviour.expression_steps import AssignmentStep, ConditionalRule, RuleStep
+from behaviour.expression_steps import NEIGHBOUR_HELPERS, AssignmentStep, ConditionalRule, RuleStep
+from behaviour.neighbour_helpers import make_neighbour_helpers
 from runner.state import AgentState
 
 
@@ -86,9 +89,8 @@ _SUPPORTED_OPS = {
     "/=": lambda current, rhs: current / rhs,
 }
 
-# Returns the start-of-step neighbour state list for a topology.
-# topology_name is None when the step did not specify one (0/1 topologies).
-NeighboursFor = Callable[[str | None], list[dict[str, Any]]]
+# Returns the start-of-step neighbour snapshots for a topology.
+NeighboursFor = Callable[[str | None], list[AgentState]]
 
 
 def _safe_eval(
@@ -186,65 +188,83 @@ def evaluate_step(
     step: AssignmentStep,
     agent: AgentState,
     neighbours_for: NeighboursFor,
-    extra_functions: dict[str, Callable[..., Any]] | None = None,
 ) -> None:
     """Evaluate one plain step and write the result to agent.state[field].
-
-    The expression is pure (no assignment operator); the write happens
-    here and is applied immediately, so later steps see it.
 
     Args:
         step: the validated AssignmentStep.
         agent: the AgentState being mutated.
-        neighbours_for: resolves step.topology_name to the start-of-step
-            neighbour list (the executor ignores the name when there are
-            0 or 1 topologies). Cache per (agent, topology) in the executor
-            so steps that don't read neighbours stay cheap.
-        extra_functions: snapshot-bound neighbour helpers (Ticket 3).
+        neighbours_for: resolves topology_name to neighbour AgentState
+            snapshots (start-of-step).
 
     Raises:
         ValueError: if the expression fails to evaluate safely.
-        KeyError: if step.field is not defined on the agent (AgentState.set).
+        KeyError: if step.field is not defined on the agent.
     """
+    neighbour_agents = neighbours_for(step.topology_name)
     value = _safe_eval(
         step.expression,
         agent,
-        neighbours_for(step.topology_name),
-        extra_functions,
+        [a.state for a in neighbour_agents],
+        make_neighbour_helpers(neighbour_agents),
     )
     agent.set(step.field, value)
+
+
+@lru_cache(maxsize=1024)
+def _uses_neighbours(expression: str) -> bool:
+    """True if the expression calls a neighbour helper or reads `neighbours`.
+
+    Cached, so conditions that only read own state skip building the
+    neighbour list (which is O(N) under AllPairs).
+    """
+    return any(
+        (
+            isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Name)
+            and n.func.id in NEIGHBOUR_HELPERS
+        )
+        or (isinstance(n, ast.Name) and n.id == "neighbours")
+        for n in ast.walk(ast.parse(expression, mode="eval"))
+    )
 
 
 def run_rule_steps(
     steps: list[RuleStep],
     agent: AgentState,
     neighbours_for: NeighboursFor,
-    eval_condition: Callable[[str, AgentState], bool],
-    extra_functions: dict[str, Callable[..., Any]] | None = None,
 ) -> None:
     """Run a rule's steps in order against one agent.
 
     Conditions are evaluated at the point they are reached, so they see
-    writes made by earlier steps (native Python order). Iterative, using
-    an explicit stack of iterators, so nesting depth has no hard cap and
-    cannot hit Python's recursion limit.
+    writes made by earlier steps. Conditions may call the neighbour
+    helpers; they resolve neighbours through the conditional's own
+    topology_name. Iterative, so nesting depth has no hard cap.
 
     Args:
-        steps: list of AssignmentStep / ConditionalRule from
-            behaviour.rule_steps.build_rule_steps.
+        steps: AssignmentStep / ConditionalRule list from build_rule_steps.
         agent: the AgentState being mutated.
-        neighbours_for: see evaluate_step.
-        eval_condition: e.g. behaviour.condition._evaluate_condition
-            (expr, agent) -> bool.
-        extra_functions: snapshot-bound neighbour helpers (Ticket 3).
+        neighbours_for: resolves topology_name to start-of-step neighbour
+            AgentState snapshots.
     """
+    from behaviour.condition import _evaluate_condition  # lazy, as in S-10
+
     stack = [iter(steps)]
     while stack:
         step = next(stack[-1], None)
         if step is None:
             stack.pop()
         elif isinstance(step, ConditionalRule):
-            branch = step.then if eval_condition(step.condition, agent) else step.else_
-            stack.append(iter(branch))
+            if _uses_neighbours(step.condition):
+                neighbour_agents = neighbours_for(step.topology_name)
+                taken = _evaluate_condition(
+                    step.condition,
+                    agent,
+                    neighbour_agents,
+                    make_neighbour_helpers(neighbour_agents),
+                )
+            else:
+                taken = _evaluate_condition(step.condition, agent)
+            stack.append(iter(step.then if taken else step.else_))
         else:
-            evaluate_step(step, agent, neighbours_for, extra_functions)
+            evaluate_step(step, agent, neighbours_for)

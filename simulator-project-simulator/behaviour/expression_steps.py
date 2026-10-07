@@ -11,7 +11,7 @@ import ast
 import logging
 from typing import Any, Iterable, Iterator, Mapping, Union
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_serializer
 
 logger = logging.getLogger("simulator")
 
@@ -56,6 +56,14 @@ class ConditionalRule(BaseModel):
     condition: str
     then: list["RuleStep"]
     else_: list["RuleStep"] = Field(default_factory=list, alias="else")
+
+    @model_serializer(mode="wrap")
+    def _dump_else_key(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """Rename `else_` to `else` in every dump, with or without by_alias."""
+        data = handler(self)
+        if "else_" in data:
+            data["else"] = data.pop("else_")
+        return data
 
 
 RuleStep = Union[AssignmentStep, ConditionalRule]
@@ -110,18 +118,20 @@ def desugar_line(line: str) -> dict[str, str]:
     return {"field": field, "expression": ast.unparse(value)}
 
 
-def normalize_steps(raw: Iterable[Any]) -> list[Any]:
+def normalise_steps(raw: Iterable[Any]) -> list[Any]:
     """Recursively desugar authored string lines into step dicts."""
     out: list[Any] = []
     for item in raw:
         if isinstance(item, str):
             out.append(desugar_line(item))
         elif isinstance(item, Mapping) and "condition" in item:
+            else_raw = item.get("else", item.get("else_", []))
+            rest = {k: v for k, v in item.items() if k not in ("else", "else_")}
             out.append(
                 {
-                    **item,
-                    "then": normalize_steps(item.get("then", [])),
-                    "else": normalize_steps(item.get("else", [])),
+                    **rest,
+                    "then": normalise_steps(item.get("then", [])),
+                    "else": normalise_steps(else_raw),
                 }
             )
         else:
@@ -188,6 +198,6 @@ def build_rule_steps(raw: Any, topology_names: list[str]) -> list[RuleStep]:
     """Parse + validate a rule entry. Legacy single dict -> one-step list."""
     if isinstance(raw, Mapping):  # existing single-expression rules, no migration
         raw = [raw]
-    steps = _STEPS_ADAPTER.validate_python(normalize_steps(raw))
+    steps = _STEPS_ADAPTER.validate_python(normalise_steps(raw))
     validate_steps(steps, topology_names)
     return steps

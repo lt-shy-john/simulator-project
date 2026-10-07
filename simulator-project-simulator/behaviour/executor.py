@@ -37,7 +37,7 @@ Not in scope here:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Union
+from typing import Any, Callable, Union
 import logging
 import sys
 
@@ -45,9 +45,11 @@ from runner.soa import to_soa, ID_KEY
 from topology.topology import TopologyProtocol
 from behaviour.base import BehaviourModule
 from behaviour.accessor import NeighbourAccessor, WriteMode, apply_deferred_writes
-from behaviour.expressions import evaluate_expression
+from behaviour.condition import _evaluate_condition
+from behaviour.expressions import run_rule_steps, evaluate_expression
+from behaviour.expression_steps import RuleStep, build_rule_steps
 from behaviour.registry import get_behaviour
-from scheduler.scheduler import ScheduleConfig, resolve_step_agents, consume_lifetime_action
+from scheduler.scheduler import resolve_step_agents, consume_lifetime_action
 from lifecycle.lifecycle import apply_pending_lifecycle_events
 from stopping.engine import check_stopping, StopResult, StoppingConfig
 from util.collector import collect_aggregates
@@ -66,6 +68,18 @@ class CompiledModuleEntry:
     params: dict[str, Any]
     topology_name: str | None
     write_mode: WriteMode
+
+
+@dataclass(frozen=True)
+class CompiledRuleEntry:
+    """A validated list of steps (plain and/or conditional) for one rule.
+
+    Produced by compile_behaviours from {"field", "expression"} and
+    {"condition", "then", "else"} config entries, and executed by run_step
+    via run_rule_steps.
+    """
+
+    steps: list[RuleStep]
 
 
 @dataclass
@@ -106,7 +120,14 @@ def compile_behaviours(
                     f"Known topologies: {sorted(topologies.keys())}"
                 )
 
-            if "module" in entry:
+            if "field" in entry or "condition" in entry:
+                compiled_entries.append(
+                    CompiledRuleEntry(
+                        steps=build_rule_steps([entry], list(topologies))
+                    )
+                )
+
+            elif "module" in entry:
                 module_name = entry["module"]
                 module_cls = get_behaviour(module_name)
                 params = entry.get("params", {})
@@ -193,6 +214,25 @@ def run_step(
         if not entries:
             continue
         for entry in entries:
+            if isinstance(entry, CompiledRuleEntry):
+                before = dict(agent.state)
+                run_rule_steps(
+                    entry.steps,
+                    agent,
+                    _make_neighbours_for(agent, read_source, neighbour_cache),
+                    _evaluate_condition,
+                    extra_functions=None,  # TODO: Ticket 3 neighbour helpers bound to read_source
+                )
+                changed = {
+                    k: (before[k], v) for k, v in agent.state.items() if before[k] != v
+                }
+                if changed:
+                    logger.info(
+                        "[step=%s] rule steps triggered agent=%s changed=%s",
+                        model.step, agent.agent_id, changed,
+                    )
+                continue
+
             neighbours = (
                 neighbour_cache.get(entry.topology_name, {}).get(agent.agent_id, [])
                 if entry.topology_name is not None else []
@@ -232,3 +272,34 @@ def run_step(
 
     model.log_event("step_end", agent_id=None)
     return check_stopping(model, stopping_config)
+
+def _make_neighbours_for(
+    agent: Any,
+    read_source: dict[str, Any],
+    neighbour_cache: dict[str, dict[str, list[str]]],
+) -> Callable[[str | None], list[dict[str, Any]]]:
+    """Build the topology_name -> neighbour-state-list lookup for one agent.
+
+    With exactly one topology, a step without topology_name resolves to it
+    (matching "not required with 0 or 1 topologies"). With none, or with
+    several and no name, the step gets no neighbours; config validation
+    already guarantees a name wherever a neighbour helper needs one.
+
+    Args:
+        agent: the AgentState currently being processed.
+        read_source: frozen_population or live_population, per schedule.read_mode.
+        neighbour_cache: topology name -> agent id -> neighbour ids.
+
+    Returns:
+        A callable taking topology_name and returning neighbour state dicts.
+    """
+    sole_topology = next(iter(neighbour_cache)) if len(neighbour_cache) == 1 else None
+
+    def neighbours_for(topology_name: str | None) -> list[dict[str, Any]]:
+        name = topology_name if topology_name is not None else sole_topology
+        if name is None:
+            return []
+        ids = neighbour_cache.get(name, {}).get(agent.agent_id, [])
+        return [read_source[nid].state for nid in ids]
+
+    return neighbours_for

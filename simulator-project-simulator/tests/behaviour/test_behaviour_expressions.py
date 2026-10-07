@@ -223,6 +223,10 @@ def test_nested_ternary_with_model_count() -> None:
     )
     assert evaluate_condition(expr, model) is True
 
+# ----------------------------------
+# Test conditional with neighbours
+# ----------------------------------
+
 GAIN_STEP = [
     {
         "field": "energy",
@@ -242,9 +246,12 @@ def _run(own_energy: float, neighbour_energies: list[float]) -> float:
     agent = AgentState(
         agent_id="a1", agent_type_name="agent", state={"energy": own_energy}
     )
+    neighbours = [
+        AgentState(agent_id=f"n{i}", agent_type_name="agent", state={"energy": e})
+        for i, e in enumerate(neighbour_energies)
+    ]
     steps = build_rule_steps(GAIN_STEP, topology_names=["contact"])
-    neighbours = [{"energy": e} for e in neighbour_energies]
-    run_rule_steps(steps, agent, lambda _t: neighbours, _evaluate_condition)
+    run_rule_steps(steps, agent, lambda _t: neighbours)
     return agent.get("energy")
 
 
@@ -255,3 +262,31 @@ def test_gains_when_neighbours_are_richer():
 
 def test_no_change_when_neighbours_are_poorer():
     assert _run(60.0, [40.0, 40.0]) == 60.0
+
+
+# -------------------
+# Neighbour helpers
+# -------------------
+
+def test_condition_can_use_neighbour_helper():
+    agent = AgentState(
+        agent_id="a1", agent_type_name="agent", state={"alert": False}
+    )
+    neighbours = [
+        AgentState(agent_id="n1", agent_type_name="agent", state={"status": "I"}),
+        AgentState(agent_id="n2", agent_type_name="agent", state={"status": "S"}),
+    ]
+    steps = build_rule_steps(
+        [
+            {
+                "condition": """neighbor_count('state["status"] == "I"') > 0""",
+                "then": [{"field": "alert", "expression": "True"}],
+                "else": [],
+            }
+        ],
+        topology_names=[],
+    )
+
+    run_rule_steps(steps, agent, lambda _t: neighbours)
+
+    assert agent.get("alert") is True

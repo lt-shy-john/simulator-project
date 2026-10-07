@@ -26,7 +26,7 @@ def make_agent(**attributes: Any) -> AgentState:
 def test_later_steps_see_earlier_writes():  # your conftest factory
     agent = make_agent(a=1, b=0)
     steps = build_rule_steps(["a += 1", "b = state['a'] * 10"], topology_names=[])
-    run_rule_steps(steps, agent, lambda _t: [], lambda e, a: True)
+    run_rule_steps(steps, agent, lambda _t: [])
     assert agent.get("a") == 2 and agent.get("b") == 20
 
 '''
@@ -60,7 +60,7 @@ def _human(age: int, employed: bool = True, weight_kg: float = 70.0) -> AgentSta
 def _run(agent: AgentState) -> None:
     """Compile HUMAN_STEPS and run them once against the agent."""
     steps = build_rule_steps(HUMAN_STEPS, topology_names=[])
-    run_rule_steps(steps, agent, lambda _topology: [], _evaluate_condition)
+    run_rule_steps(steps, agent, lambda _topology: [])
 
 
 def test_config_parses_into_expected_structure():

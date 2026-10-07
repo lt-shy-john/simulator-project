@@ -42,6 +42,7 @@ import logging
 import sys
 
 from runner.soa import to_soa, ID_KEY
+from runner.state import AgentState
 from topology.topology import TopologyProtocol
 from behaviour.base import BehaviourModule
 from behaviour.accessor import NeighbourAccessor, WriteMode, apply_deferred_writes
@@ -220,8 +221,6 @@ def run_step(
                     entry.steps,
                     agent,
                     _make_neighbours_for(agent, read_source, neighbour_cache),
-                    _evaluate_condition,
-                    extra_functions=None,  # TODO: Ticket 3 neighbour helpers bound to read_source
                 )
                 changed = {
                     k: (before[k], v) for k, v in agent.state.items() if before[k] != v
@@ -295,11 +294,11 @@ def _make_neighbours_for(
     """
     sole_topology = next(iter(neighbour_cache)) if len(neighbour_cache) == 1 else None
 
-    def neighbours_for(topology_name: str | None) -> list[dict[str, Any]]:
+    def neighbours_for(topology_name: str | None) -> list[AgentState]:
         name = topology_name if topology_name is not None else sole_topology
         if name is None:
             return []
         ids = neighbour_cache.get(name, {}).get(agent.agent_id, [])
-        return [read_source[nid].state for nid in ids]
+        return [read_source[nid] for nid in ids]
 
     return neighbours_for

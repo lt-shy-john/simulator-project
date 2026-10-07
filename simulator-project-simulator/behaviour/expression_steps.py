@@ -11,7 +11,7 @@ import ast
 import logging
 from typing import Any, Iterable, Iterator, Mapping, Union
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, TypeAdapter, field_validator, model_serializer
 
 logger = logging.getLogger("simulator")
 
@@ -56,6 +56,7 @@ class ConditionalRule(BaseModel):
     condition: str
     then: list["RuleStep"]
     else_: list["RuleStep"] = Field(default_factory=list, alias="else")
+    topology_name: str | None = None  # needed only if the condition calls a helper
 
     @model_serializer(mode="wrap")
     def _dump_else_key(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
@@ -154,13 +155,51 @@ def walk_steps(steps: list[RuleStep]) -> Iterator[tuple[RuleStep, int]]:
 
 
 def calls_neighbour_helper(expression: str) -> bool:
-    """True if the expression contains a Call to a recognised helper (AST check)."""
-    return any(
-        isinstance(n, ast.Call)
-        and isinstance(n.func, ast.Name)
-        and n.func.id in NEIGHBOUR_HELPERS
-        for n in ast.walk(ast.parse(expression, mode="eval"))
-    )
+    """True if the expression calls a neighbour helper or reads `neighbours`.
+
+    Detected by AST inspection, not substring matching: a Call to a name in
+    NEIGHBOUR_HELPERS, or a bare reference to the name `neighbours`.
+    """
+    for node in ast.walk(ast.parse(expression, mode="eval")):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in NEIGHBOUR_HELPERS
+        ):
+            return True
+        if isinstance(node, ast.Name) and node.id == "neighbours":
+            return True
+    return False
+
+
+def _check_topology(
+    expression: str,
+    topology_name: str | None,
+    label: str,
+    topology_names: list[str],
+) -> None:
+    """Apply the topology_name rules to one expression (step or condition).
+
+    Args:
+        expression: the expression text to inspect for neighbour-helper calls.
+        topology_name: the name given on the step/conditional, if any.
+        label: text identifying the step in error messages.
+        topology_names: names of all configured topologies.
+
+    Raises:
+        ValueError: if a name is required but missing, or names an unknown topology.
+    """
+    if (
+        len(topology_names) >= 2
+        and topology_name is None
+        and calls_neighbour_helper(expression)
+    ):
+        raise ValueError(
+            f"{label} uses a neighbour helper but has no topology_name; "
+            f"required with {len(topology_names)} topologies"
+        )
+    if topology_name is not None and topology_names and topology_name not in topology_names:
+        raise ValueError(f"{label} has unknown topology_name {topology_name!r}")
 
 
 def validate_steps(steps: list[RuleStep], topology_names: list[str]) -> None:
@@ -175,23 +214,15 @@ def validate_steps(steps: list[RuleStep], topology_names: list[str]) -> None:
                     else_depth, SOFT_ELSE_DEPTH,
                 )
                 warned = True
-            continue
-
-        if (
-            len(topology_names) >= 2
-            and step.topology_name is None
-            and calls_neighbour_helper(step.expression)
-        ):
-            raise ValueError(
-                f"step for field {step.field!r} uses a neighbour helper but has no "
-                f"topology_name; required with {len(topology_names)} topologies"
+            _check_topology(
+                step.condition, step.topology_name,
+                f"condition {step.condition!r}", topology_names,
             )
-        if (
-            step.topology_name is not None
-            and topology_names
-            and step.topology_name not in topology_names
-        ):
-            raise ValueError(f"unknown topology_name {step.topology_name!r}")
+        else:
+            _check_topology(
+                step.expression, step.topology_name,
+                f"step for field {step.field!r}", topology_names,
+            )
 
 
 def build_rule_steps(raw: Any, topology_names: list[str]) -> list[RuleStep]:

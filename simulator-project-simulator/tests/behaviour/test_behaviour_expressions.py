@@ -3,7 +3,8 @@ import uuid
 import random
 from typing import Any
 
-from behaviour.expressions import evaluate_expression
+from behaviour.expressions import evaluate_expression, run_rule_steps
+from behaviour.expression_steps import build_rule_steps
 from behaviour.condition import _evaluate_condition
 from runner.state import AgentState
 from stopping.expression import evaluate_condition
@@ -222,3 +223,35 @@ def test_nested_ternary_with_model_count() -> None:
     )
     assert evaluate_condition(expr, model) is True
 
+GAIN_STEP = [
+    {
+        "field": "energy",
+        "expression": (
+            "state['energy'] + 0.1 * max(0, "
+            "sum(n['energy'] for n in neighbours) / len(neighbours)"
+            " - state['energy']) if len(neighbours) > 0 "
+            "else state['energy']"
+        ),
+        "topology_name": "contact",
+    }
+]
+
+
+def _run(own_energy: float, neighbour_energies: list[float]) -> float:
+    """Run the gain step for one agent and return its resulting energy."""
+    agent = AgentState(
+        agent_id="a1", agent_type_name="agent", state={"energy": own_energy}
+    )
+    steps = build_rule_steps(GAIN_STEP, topology_names=["contact"])
+    neighbours = [{"energy": e} for e in neighbour_energies]
+    run_rule_steps(steps, agent, lambda _t: neighbours, _evaluate_condition)
+    return agent.get("energy")
+
+
+def test_gains_when_neighbours_are_richer():
+    # neighbour mean 80, own 60 -> 60 + 0.1 * 20
+    assert _run(60.0, [80.0, 80.0]) == 62.0
+
+
+def test_no_change_when_neighbours_are_poorer():
+    assert _run(60.0, [40.0, 40.0]) == 60.0

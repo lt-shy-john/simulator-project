@@ -1,7 +1,8 @@
 from typing import Annotated, Any, Literal, Union
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from agents.agents import AgentType
+from behaviour.expression_steps import AssignmentStep, ConditionalRule
 from stopping.engine import StoppingConfig
 
 """
@@ -77,6 +78,10 @@ class ModuleBehaviourEntry(BaseModel):
 
 
 class ExpressionBehaviourEntry(BaseModel):
+    """Legacy single-string expression entry, e.g. 'state["x"] += 1'."""
+
+    model_config = ConfigDict(extra="forbid")  # a stray `field` key now fails loudly
+
     expression: str
     topology_name: str | None = None
 
@@ -84,7 +89,9 @@ class ExpressionBehaviourEntry(BaseModel):
 # No shared discriminator field (module vs expression are different key
 # names), so this relies on Pydantic v2's default "smart" union matching —
 # each entry has a distinct required field, so exactly one member validates.
-BehaviourEntry = Union[ModuleBehaviourEntry, ExpressionBehaviourEntry]
+BehaviourEntry = Union[
+    ModuleBehaviourEntry, ExpressionBehaviourEntry, AssignmentStep, ConditionalRule
+]
 
 
 # ---------------------------------------------------------------------------

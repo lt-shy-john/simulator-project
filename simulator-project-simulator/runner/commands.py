@@ -55,6 +55,30 @@ def default_config(n: int, t: int) -> dict:
     keep working as a quick sanity check, not to express real simulation
     intent. Use 'setting' for anything that needs to mean something.
     """
+    # return {
+    #     "seed": None,
+    #     "agent_types": [
+    #         {
+    #             "name": "agent",
+    #             "count": n,
+    #             "generation_mode": "heterogeneous",
+    #             "attributes": [
+    #                 {
+    #                     "name": "step_count",
+    #                     "type": "int",
+    #                     "population_method": "distribution",
+    #                     "distribution": {"kind": "fixed", "value": 0},
+    #                 }
+    #             ],
+    #         }
+    #     ],
+    #     "topologies": {"contact": {"mode": "all_pairs", "agent_types": ["agent"]}},
+    #     "behaviours": {
+    #         "agent": [{"expression": 'state["step_count"] = 1', "topology_name": "contact"}]
+    #     },
+    #     "scheduler": {"order": "all_at_once", "read_mode": "frozen"},
+    #     "stopping": {"max_steps": t, "conditions": [], "combinator": "OR"},
+    # }
     return {
         "seed": None,
         "agent_types": [
@@ -64,17 +88,69 @@ def default_config(n: int, t: int) -> dict:
                 "generation_mode": "heterogeneous",
                 "attributes": [
                     {
-                        "name": "step_count",
+                        "name": "age",
                         "type": "int",
                         "population_method": "distribution",
-                        "distribution": {"kind": "fixed", "value": 0},
-                    }
+                        "distribution": {"kind": "fixed", "value": 18},
+                    },
+                    {
+                        "name": "energy",
+                        "type": "float",
+                        "population_method": "distribution",
+                        "distribution": {"kind": "normal", "mean": 50.0, "stddev": 12.0},
+                    },
+                    {
+                        "name": "gender",
+                        "type": "categorical",
+                        "population_method": "distribution",
+                        "distribution": {
+                            "kind": "categorical",
+                            "weights": {"male": 0.25, "female": 0.75},
+                        },
+                    },
+                    {
+                        "name": "region",
+                        "type": "categorical",
+                        "population_method": "distribution",
+                        "distribution": {
+                            "kind": "categorical",
+                            "weights": {"north": 0.25, "south": 0.25, "east": 0.25, "west": 0.25},
+                        },
+                    },
                 ],
             }
         ],
         "topologies": {"contact": {"mode": "all_pairs", "agent_types": ["agent"]}},
         "behaviours": {
-            "agent": [{"expression": 'state["step_count"] = 1', "topology_name": "contact"}]
+            "agent": [{"field": "age", "expression": "state['age'] + 1"},
+                      {
+                          "condition": "state['energy'] >= 50",
+                          "then": [
+                              {
+                                  "field": "energy",
+                                  # gain 10% of the gap to the neighbours' mean, never lose
+                                  "expression": (
+                                      "state['energy'] + 0.1 * max(0, "
+                                      "sum(n['energy'] for n in neighbours) / len(neighbours)"
+                                      " - state['energy']) if len(neighbours) > 0 "
+                                      "else state['energy']"
+                                  ),
+                                  "topology_name": "contact",  # optional with one topology
+                              },
+                          ],
+                          "else": [
+                              {"field": "energy", "expression": "state['energy'] - 0.5"},
+                          ],
+                      },
+                      {
+                          "condition": "state['gender'] == 'male'",
+                          "then": [
+                              {
+                                  "field": "energy", "expression": "state['energy'] - 1.5"
+                              },
+                          ]
+                      },
+                      ]
         },
         "scheduler": {"order": "all_at_once", "read_mode": "frozen"},
         "stopping": {"max_steps": t, "conditions": [], "combinator": "OR"},

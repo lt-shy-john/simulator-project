@@ -126,6 +126,12 @@ def default_config(n: int, t: int) -> dict:
                       {
                           "condition": "state['energy'] >= 50",
                           "then": [
+                              {"field": "energy",
+                               "expression": "state['energy'] + 2 * len([n for n in neighbours if n['region'] == state['region']]) / max(1, len(neighbours))",
+                                  "topology_name": "contact",  # optional with one topology
+                               },
+                          ],
+                          "else": [
                               {
                                   "field": "energy",
                                   # gain 10% of the gap to the neighbours' mean, never lose
@@ -137,9 +143,6 @@ def default_config(n: int, t: int) -> dict:
                                   ),
                                   "topology_name": "contact",  # optional with one topology
                               },
-                          ],
-                          "else": [
-                              {"field": "energy", "expression": "state['energy'] - 0.5"},
                           ],
                       },
                       {

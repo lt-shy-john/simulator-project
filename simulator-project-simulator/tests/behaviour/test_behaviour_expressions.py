@@ -4,7 +4,7 @@ import random
 from typing import Any
 
 from behaviour.expressions import evaluate_expression, run_rule_steps
-from behaviour.expression_steps import build_rule_steps
+from behaviour.expression_steps import build_rule_steps, calls_neighbour_helper
 from behaviour.condition import _evaluate_condition
 from runner.state import AgentState
 from stopping.expression import evaluate_condition
@@ -290,3 +290,23 @@ def test_condition_can_use_neighbour_helper():
     run_rule_steps(steps, agent, lambda _t: neighbours)
 
     assert agent.get("alert") is True
+
+@pytest.mark.parametrize(
+    "expression, expected",
+    [
+        ("neighbor_count('state[\"x\"] > 1') > 0", True),   # helper call
+        ("sum(n['e'] for n in neighbours)", True),          # `neighbours` name
+        ("state['neighbor_count'] + 1", False),             # substring only, no Call
+        ("state['energy'] - 0.5", False),
+    ],
+)
+def test_calls_neighbour_helper_detection(expression, expected):
+    assert calls_neighbour_helper(expression) is expected
+
+
+def test_neighbours_name_requires_topology_with_two_topologies():
+    raw = [{"field": "e", "expression": "sum(n['e'] for n in neighbours)"}]
+
+    build_rule_steps(raw, topology_names=["a"])  # one topology: fine
+    with pytest.raises(ValueError):
+        build_rule_steps(raw, topology_names=["a", "b"])

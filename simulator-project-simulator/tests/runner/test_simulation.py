@@ -301,11 +301,12 @@ class TestCsvImport:
 
 class TestToConfigRoundTrip:
     def test_to_config_preserves_all_top_level_keys(self, base_config):
+        """to_config() emits every top-level key, including the sandbox limits."""
         sim = Simulation.from_config(base_config)
         out = sim.to_config()
         assert set(out.keys()) == {
             "seed", "params", "agent_types", "initial_population",
-            "topologies", "behaviours", "scheduler", "stopping",
+            "topologies", "behaviours", "scheduler", "stopping", "sandbox",
         }
 
     def test_to_config_seed_matches_input(self, base_config):
@@ -337,6 +338,13 @@ class TestToConfigRoundTrip:
         ages2 = sorted(a.state["age"] for a in sim2.live_population.values())
 
         assert ages1 == ages2
+
+    def test_to_config_round_trips_sandbox_limits(self, base_config):
+        """A custom sandbox section survives from_config -> to_config."""
+        base_config["sandbox"] = {"max_neighbours": 5000}
+        out = Simulation.from_config(base_config).to_config()
+        assert out["sandbox"]["max_neighbours"] == 5000
+        assert out["sandbox"]["max_hops"] is None
 
 # ---------------------------------------------------------------------------
 # Network topology — graph config round-trip and bring-your-own file handling

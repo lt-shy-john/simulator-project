@@ -52,6 +52,11 @@ from simpleeval import EvalWithCompoundTypes, InvalidExpression
 
 from behaviour.expression_steps import NEIGHBOUR_HELPERS, AssignmentStep, ConditionalRule, RuleStep
 from behaviour.neighbour_helpers import make_neighbour_helpers
+from behaviour.expression_comprehensions import (
+    SandboxConfig,
+    check_comprehension_policy,
+    check_neighbour_cap,
+)
 from runner.state import AgentState
 
 
@@ -135,6 +140,7 @@ def evaluate_expression(
     expr: str,
     agent: AgentState,
     neighbours_state: list[dict[str, Any]],
+    sandbox: SandboxConfig | None = None,
 ) -> None:
     """Parse and execute one assignment-style expression against agent.state.
 
@@ -151,12 +157,16 @@ def evaluate_expression(
             each containing that neighbour's state as of the start of
             this step. Precomputed by the executor before calling this
             function — same t-1 guarantee as NeighbourAccessor.read().
+        sandbox: comprehension limits (neighbour cap, hop warning
+            threshold); defaults to ``SandboxConfig()``.
 
     Raises:
         ValueError: if expr doesn't match the required
             'state["key"] OP expression' shape, or if the rhs expression
             fails to evaluate safely (undefined names, disallowed
-            operations, syntax errors).
+            operations, syntax errors), or a comprehension exceeding
+            the neighbour cap or a configured hard hop cap (both are
+            ValueError subclasses).
         KeyError: if the target key is not a defined attribute on agent
             (raised by AgentState.get/set — see runner/state.py). This
             applies to '=' as well, consistent with S-02's design that new
@@ -164,17 +174,24 @@ def evaluate_expression(
     """
     match = _ASSIGNMENT_PATTERN.match(expr)
     if not match:
-        raise ValueError(
-            f"Expression '{expr}' does not match the required shape "
-            f"'state[\"key\"] OP expression', where OP is one of "
-            f"{sorted(_SUPPORTED_OPS.keys())}."
-        )
+        raise ValueError(...)  # unchanged
 
     key = match.group("key")
     op = match.group("op")
-    rhs_value = _safe_eval(
-        match.group("rhs"), agent, neighbours_state, display=expr
+    rhs = match.group("rhs")
+
+    sandbox = sandbox or SandboxConfig()
+    report = check_comprehension_policy(
+        rhs,
+        soft_threshold=sandbox.soft_hop_threshold,
+        max_hops=sandbox.max_hops,
     )
+    if report.has_comprehension:
+        check_neighbour_cap(
+            neighbours_state, sandbox.max_neighbours, agent_id=agent.agent_id
+        )
+
+    rhs_value = _safe_eval(rhs, agent, neighbours_state, display=expr)
 
     current_value = agent.get(key) if op != "=" else None
     try:

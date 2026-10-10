@@ -3,6 +3,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from agents.agents import AgentType
 from behaviour.expression_steps import AssignmentStep, ConditionalRule
+from behaviour.expression_comprehensions import SandboxConfig
 from stopping.engine import StoppingConfig
 
 """
@@ -150,6 +151,7 @@ class SimulationConfig(BaseModel):
     behaviours: dict[str, list[BehaviourEntry]]
     scheduler: SchedulerConfigSchema
     stopping: StoppingConfig
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
     @model_validator(mode="after")
     def _check_agent_type_names_unique(self) -> "SimulationConfig":

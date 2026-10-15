@@ -12,6 +12,7 @@ from runner.simulationConfig import SimulationConfig
 from topology.topology import build_topologies, TopologyProtocol
 from behaviour.executor import compile_behaviours, run_step, CompiledEntry
 from behaviour.model import SimulationModel
+from behaviour.expression_comprehensions import SandboxConfig
 from scheduler.scheduler import compile_scheduling, ScheduleConfig
 from stopping.engine import StoppingConfig, StopResult
 
@@ -50,6 +51,7 @@ class Simulation():
         schedule: ScheduleConfig,
         agent_types: dict[str, AgentType],
         stopping_config: StoppingConfig,
+        sandbox: SandboxConfig | None = None,
     ):
         """
         Args:
@@ -64,6 +66,8 @@ class Simulation():
                 events (reproduce/external_entry) for fresh-attribute sampling.
             stopping_config: compiled StoppingConfig — max_steps and any
                 condition expressions that end the run early.
+            sandbox: comprehension limits (neighbour cap, hop warning
+                threshold); None falls back to ``SandboxConfig()`` defaults.
         """
         self.live_population = live_population
         self.compiled_behaviours = compiled_behaviours
@@ -74,6 +78,7 @@ class Simulation():
         self.stopping_config = stopping_config
         self.step_number = 0
         self._config: SimulationConfig | None = None  # set by from_config()
+        self._sandbox = sandbox
 
         self.logger = logging.getLogger('simulator')
 
@@ -112,6 +117,7 @@ class Simulation():
                 agent_types=self.agent_types,
                 step_number=self.step_number,
                 stopping_config=self.stopping_config,
+                sandbox=self._sandbox,
             )
             time.sleep(1)  # todo: Find out why at the simulation code side there must be a time sleep as well
 
@@ -169,6 +175,7 @@ class Simulation():
             schedule=schedule,
             agent_types=agent_types,
             stopping_config=cfg.stopping,
+            sandbox=cfg.sandbox,
         )
         sim._config = cfg  # retained verbatim, see to_config() below
         return sim

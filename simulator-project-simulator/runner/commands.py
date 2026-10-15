@@ -80,7 +80,7 @@ def default_config(n: int, t: int) -> dict:
     #     "stopping": {"max_steps": t, "conditions": [], "combinator": "OR"},
     # }
     return {
-        "seed": None,
+        "seed": 1,
         "agent_types": [
             {
                 "name": "agent",
@@ -127,9 +127,7 @@ def default_config(n: int, t: int) -> dict:
                           "condition": "state['energy'] >= 50",
                           "then": [
                               {"field": "energy",
-                               "expression": "state['energy'] + 2 * len([n for n in neighbours if n['region'] == state['region']]) / max(1, len(neighbours))",
-                                  "topology_name": "contact",  # optional with one topology
-                               },
+                               "expression": "state['energy'] + 0.1 * len([n for n in neighbours if n['region'] == state['region']])"},
                           ],
                           "else": [
                               {

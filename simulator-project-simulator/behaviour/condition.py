@@ -27,11 +27,20 @@ Design notes:
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable, Sequence
 from simpleeval import EvalWithCompoundTypes, InvalidExpression
 from typing import Any, Callable, Sequence
 
 from runner.state import AgentState
 from behaviour.expressions import _SAFE_FUNCTIONS
+from behaviour.expression_comprehensions import (
+    NEIGHBORS_NAMES,
+    SandboxConfig,
+    build_views_from_states,
+    check_comprehension_policy,
+    check_neighbour_cap,
+    enable_comprehensions,
+)
 
 
 def _evaluate_condition(
@@ -39,32 +48,48 @@ def _evaluate_condition(
     agent: AgentState,
     neighbours: Sequence[AgentState] | None = None,
     extra_functions: dict[str, Callable[..., Any]] | None = None,
+    sandbox: SandboxConfig | None = None,
+    neighbours_of: Callable[[str], Iterable[AgentState]] | None = None,
 ) -> bool:
     """Evaluate a bare boolean condition against one agent's state.
 
-    Args:
-        expr: a safe expression string, e.g. "state['infected'] == True"
-            or "state['energy'] > 10". No assignment; nothing is mutated.
-        agent: the agent to test the condition against.
-        neighbours: optional neighbour snapshots. When given, the name
-            `neighbours` (a list of state dicts) is available in expr.
-        extra_functions: optional extra whitelisted callables, e.g. the
-            neighbour helpers bound to `neighbours`.
-
-    Returns:
-        the boolean result of evaluating expr
+    ...existing docstring...
+        sandbox: comprehension limits; defaults to ``SandboxConfig()``.
+        neighbours_of: returns the neighbours of any agent id, enabling
+            ``n['neighbours']`` (one hop beyond) inside comprehensions.
 
     Raises:
-        ValueError: if expr fails to evaluate safely, or if the result
-            isn't a bool
+        ValueError: ...existing reasons..., or a comprehension exceeding
+            the neighbour cap or a configured hard hop cap.
     """
+    sandbox = sandbox or SandboxConfig()
+    report = check_comprehension_policy(
+        expr,
+        soft_threshold=sandbox.soft_hop_threshold,
+        max_hops=sandbox.max_hops,
+    )
+
     context: dict[str, Any] = {"state": dict(agent.state)}
     if neighbours is not None:
-        context["neighbours"] = [a.state for a in neighbours]
+        if report.has_comprehension:
+            check_neighbour_cap(
+                neighbours, sandbox.max_neighbours,
+                agent_id=getattr(agent, "agent_id", None),
+            )
+        if report.max_hop >= 1 and neighbours_of is not None:
+            states = build_views_from_states(
+                neighbours, neighbours_of, max_neighbors=sandbox.max_neighbours
+            )
+        else:
+            states = [a.state for a in neighbours]
+        for alias in NEIGHBORS_NAMES:
+            context[alias] = states
     functions = {**_SAFE_FUNCTIONS, **(extra_functions or {})}
 
     try:
-        evaluator = EvalWithCompoundTypes(names=context, functions=functions)
+        evaluator = enable_comprehensions(
+            EvalWithCompoundTypes(names=context, functions=functions)
+        )
         result = evaluator.eval(expr)
     except InvalidExpression as e:
         raise ValueError(f"Condition '{expr}' failed to evaluate safely: {e}") from e

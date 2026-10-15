@@ -32,40 +32,6 @@ from behaviour.registry import register_behaviour
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
-def base_config() -> dict:
-    """A minimal, fully valid config: one heterogeneous agent type with a
-    single distribution-driven attribute, an all_pairs topology, one
-    expression behaviour, all_at_once scheduling, and a max_steps stop."""
-    return {
-        "seed": 42,
-        "agent_types": [
-            {
-                "name": "person",
-                "count": 5,
-                "generation_mode": "heterogeneous",
-                "attributes": [
-                    {
-                        "name": "age",
-                        "type": "int",
-                        "population_method": "distribution",
-                        "distribution": {"kind": "uniform", "low": 0, "high": 100},
-                    },
-                ],
-            }
-        ],
-        "topologies": {
-            "contact": {"mode": "all_pairs", "agent_types": ["person"]},
-        },
-        "behaviours": {
-            "person": [
-                {"expression": 'state["age"] += 1', "topology_name": "contact"},
-            ],
-        },
-        "scheduler": {"order": "all_at_once", "read_mode": "frozen"},
-        "stopping": {"max_steps": 3, "conditions": [], "combinator": "OR"},
-    }
-
 
 @pytest.fixture
 def person_agent_type() -> AgentType:

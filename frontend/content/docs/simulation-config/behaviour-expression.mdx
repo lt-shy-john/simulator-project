@@ -1,0 +1,39 @@
+<Callout title="Draft" type="warn">
+	Will need to review this page later. 
+</Callout>
+
+## Comprehensions (advanced)
+
+Prefer the built-in helpers (`neighbor_count`, `neighbor_mean`, `neighbor_sum`,
+`neighbor_any`, `neighbor_all`). They are faster and easier to read.
+
+```
+state["infected"] = neighbor_count('state["status"] == "I"') >= 2
+```
+
+Use a comprehension only for queries the helpers can't express, such as anything
+that needs each neighbour's own values:
+
+```
+state["energy"] = state["energy"] + 0.1 * max(n["energy"] for n in neighbours)
+```
+
+`neighbours` (or `neighbors`) is a list of neighbour state dicts. Inside a
+comprehension, `n["neighbours"]` gives that neighbour's own neighbours. The helpers
+and comprehensions can be combined in one expression, but note that helpers always
+refer to *your* agent's neighbours, never to the loop variable.
+
+### Cost
+
+Each extra level multiplies the work by the number of neighbours. Nesting beyond one
+hop beyond `neighbours` is allowed, but logs a warning once per expression.
+
+Set limits in the run config:
+
+```json
+"sandbox": {"max_neighbours": 1000, "soft_hop_threshold": 1, "max_hops": null}
+```
+
+- `max_neighbours`: a comprehension over a larger neighbour set is rejected.
+- `soft_hop_threshold`: hops beyond `neighbours` before the warning appears.
+- `max_hops`: set a number to reject deeper nesting instead of warning.

@@ -46,9 +46,9 @@ from runner.state import AgentState
 from topology.topology import TopologyProtocol
 from behaviour.base import BehaviourModule
 from behaviour.accessor import NeighbourAccessor, WriteMode, apply_deferred_writes
-from behaviour.condition import _evaluate_condition
 from behaviour.expressions import run_rule_steps, evaluate_expression
 from behaviour.expression_steps import RuleStep, build_rule_steps
+from behaviour.expression_comprehensions import SandboxConfig, build_views_from_ids
 from behaviour.registry import get_behaviour
 from scheduler.scheduler import resolve_step_agents, consume_lifetime_action
 from lifecycle.lifecycle import apply_pending_lifecycle_events
@@ -195,7 +195,9 @@ _DEFAULT_STOPPING_CONFIG = StoppingConfig(max_steps=sys.maxsize)
 
 def run_step(
     live_population, compiled_behaviours, topologies, model, schedule,
-    agent_types, step_number, aggregate_collectors=None, stopping_config=_DEFAULT_STOPPING_CONFIG,
+    agent_types, step_number, aggregate_collectors=None,
+    stopping_config=_DEFAULT_STOPPING_CONFIG,
+    sandbox: SandboxConfig | None = None,
 ) -> StopResult:
     model._reset_for_step(step_number, live_population)
     model.log_event("step_start", agent_id=None)
@@ -221,6 +223,7 @@ def run_step(
                     entry.steps,
                     agent,
                     _make_neighbours_for(agent, read_source, neighbour_cache),
+                    sandbox=sandbox,
                 )
                 changed = {
                     k: (before[k], v) for k, v in agent.state.items() if before[k] != v
@@ -243,9 +246,15 @@ def run_step(
                 )
                 entry.instance.apply(agent, neighbours, accessor, model)
             else:
-                neighbours_state = [read_source[nid].state for nid in neighbours]
+                topology_cache = neighbour_cache.get(entry.topology_name, {})
+                neighbours_state = build_views_from_ids(
+                    neighbours,
+                    read_source,
+                    lambda aid, cache=topology_cache: cache.get(aid, []),
+                    max_neighbors=(sandbox or SandboxConfig()).max_neighbours,
+                )
                 before = dict(agent.state)
-                evaluate_expression(entry.expr, agent, neighbours_state)
+                evaluate_expression(entry.expr, agent, neighbours_state, sandbox=sandbox)
                 changed = {
                     k: (before[k], v) for k, v in agent.state.items() if before[k] != v
                 }
@@ -276,7 +285,7 @@ def _make_neighbours_for(
     agent: Any,
     read_source: dict[str, Any],
     neighbour_cache: dict[str, dict[str, list[str]]],
-) -> Callable[[str | None], list[dict[str, Any]]]:
+) -> Callable[..., list[AgentState]]:
     """Build the topology_name -> neighbour-state-list lookup for one agent.
 
     With exactly one topology, a step without topology_name resolves to it
@@ -290,15 +299,20 @@ def _make_neighbours_for(
         neighbour_cache: topology name -> agent id -> neighbour ids.
 
     Returns:
-        A callable taking topology_name and returning neighbour state dicts.
+        A callable ``neighbours_for(topology_name, of=None)``. ``of`` is an
+        optional agent id whose neighbours are returned instead of
+        ``agent``'s; the comprehension sandbox uses it for deeper hops.
     """
     sole_topology = next(iter(neighbour_cache)) if len(neighbour_cache) == 1 else None
 
-    def neighbours_for(topology_name: str | None) -> list[AgentState]:
+    def neighbours_for(
+        topology_name: str | None, of: str | None = None
+    ) -> list[AgentState]:
         name = topology_name if topology_name is not None else sole_topology
         if name is None:
             return []
-        ids = neighbour_cache.get(name, {}).get(agent.agent_id, [])
+        owner = of if of is not None else agent.agent_id
+        ids = neighbour_cache.get(name, {}).get(owner, [])
         return [read_source[nid] for nid in ids]
 
     return neighbours_for

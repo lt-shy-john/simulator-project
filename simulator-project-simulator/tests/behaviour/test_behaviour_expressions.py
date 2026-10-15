@@ -5,19 +5,21 @@ import logging
 from typing import Any
 from types import SimpleNamespace
 
-from behaviour.expressions import evaluate_expression, run_rule_steps
+from behaviour.expressions import evaluate_expression, run_rule_steps, _safe_eval, _uses_neighbours
 from behaviour.expression_steps import build_rule_steps, calls_neighbour_helper
 from behaviour.expression_comprehensions import (
     ComprehensionDepthError,
     NeighborSetTooLargeError,
     analyse_expression,
-    evaluate_with_neighbors,
+    build_views_from_states,
     SandboxConfig,
     check_comprehension_policy,
     check_neighbour_cap,
     reset_policy_caches,
 )
 from behaviour.condition import _evaluate_condition
+from behaviour.neighbour_helpers import make_neighbour_helpers
+from runner.simulation import Simulation
 from runner.state import AgentState
 from stopping.expression import evaluate_condition
 
@@ -323,101 +325,46 @@ def test_neighbours_name_requires_topology_with_two_topologies():
     with pytest.raises(ValueError):
         build_rule_steps(raw, topology_names=["a", "b"])
 
-# -------------------
-# List comprehension
-# -------------------
+THREE_LEVEL = (
+    "[o['status'] for n in neighbours for m in n['neighbours'] "
+    "for o in m['neighbours']]"
+)
 
-FUNCS = {"len": len, "sum": sum}
 
-
-class FakeTopology:
-    """Adjacency-dict topology implementing ``neighbors(agent_id)``."""
-
-    def __init__(self, adjacency):
-        self.adjacency = adjacency
-
-    def neighbors(self, agent_id):
-        return self.adjacency.get(agent_id, [])
+@pytest.fixture(autouse=True)
+def _reset_policy_caches():
+    """Start each test with an empty warn-once set and analysis cache."""
+    reset_policy_caches()
+    yield
+    reset_policy_caches()
 
 
 @pytest.fixture
-def world():
-    """Focal agent 'a' with a small multi-hop graph."""
-    statuses = {"a": "S", "b": "I", "c": "S", "d": "I", "e": "S", "f": "I"}
-    population = {k: SimpleNamespace(state={"status": v}) for k, v in statuses.items()}
-    topology = FakeTopology(
-        {"a": ["b", "c"], "b": ["a", "d", "e"], "c": ["a"], "d": ["b", "f"], "f": ["d"]}
+def graph():
+    """Focal 'a' with neighbours b, c; b's neighbours are a, d, e.
+
+    Returns a namespace with ``focal`` (the focal agent), ``neighbours_of``
+    (agent id -> neighbour agents) and ``views`` (hop-0 AgentViews with lazy
+    deeper hops).
+    """
+    statuses = {"a": "S", "b": "I", "c": "S", "d": "I", "e": "S"}
+    agents = {
+        k: SimpleNamespace(agent_id=k, state={"status": v})
+        for k, v in statuses.items()
+    }
+    adjacency = {"a": ["b", "c"], "b": ["a", "d", "e"], "c": ["a"]}
+
+    def neighbours_of(aid):
+        return [agents[i] for i in adjacency.get(aid, [])]
+
+    return SimpleNamespace(
+        focal=agents["a"],
+        neighbours_of=neighbours_of,
+        views=build_views_from_states(neighbours_of("a"), neighbours_of),
     )
-    return population, topology
 
 
-def run_comprehension(expr, world, **kwargs):
-    population, topology = world
-    kwargs.setdefault("functions", FUNCS)
-    return evaluate_with_neighbors(
-        expr, agent_id="a", population=population, topology=topology, **kwargs
-    )
-
-
-def test_single_level_comprehensions(world):
-    assert run_comprehension("[n['status'] for n in neighbors]", world) == ["I", "S"]
-    assert run_comprehension("len({n['status'] for n in neighbors})", world) == 2
-    assert run_comprehension("sum(1 for n in neighbors if n['status'] == 'I')", world) == 1
-
-
-def test_one_hop_nested_comprehension_allowed(world, caplog):
-    expr = "[m['status'] for n in neighbors for m in n['neighbors']]"
-    with caplog.at_level(logging.WARNING, logger="simulator"):
-        result = run_comprehension(expr, world, max_hops=1)
-    assert result == ["S", "I", "S", "S"]
-    assert not caplog.records
-
-
-def test_two_hop_rejected_when_hard_cap_configured(world):
-    expr = "[o for n in neighbors for m in n['neighbors'] for o in m['neighbors']]"
-    with pytest.raises(ComprehensionDepthError):
-        run_comprehension(expr, world, max_hops=1)
-
-
-def test_two_hop_warns_but_evaluates_by_default(world, caplog):
-    expr = (
-        "[o['status'] for n in neighbors for m in n['neighbors'] "
-        "for o in m['neighbors']]"
-    )
-    with caplog.at_level(logging.WARNING, logger="simulator"):
-        result = run_comprehension(expr, world)
-    assert len(result) == 6
-    assert any("hops beyond 'neighbors'" in r.message for r in caplog.records)
-
-
-def test_comprehension_can_call_ticket3_helper(world):
-    # Stub for Ticket 3's neighbor_count; swap in the real helper.
-    funcs = {**FUNCS, "neighbor_count": lambda cond: 2}
-    assert run_comprehension("[neighbor_count('status==\"I\"') for n in neighbors]", world, functions=funcs) == [2, 2]
-
-
-def test_large_neighbour_set_rejected():
-    population = {str(i): SimpleNamespace(state={"status": "S"}) for i in range(6)}
-    topology = FakeTopology({"0": ["1", "2", "3", "4", "5"]})
-    with pytest.raises(NeighborSetTooLargeError):
-        evaluate_with_neighbors(
-            "[n['status'] for n in neighbors]",
-            agent_id="0", population=population, topology=topology, max_neighbors=3,
-        )
-
-
-@pytest.mark.parametrize(
-    "expr, hop",
-    [
-        ("[n for n in neighbors]", 0),
-        ("[m for n in neighbors for m in n['neighbors']]", 1),
-        ("[[m for m in n['neighbors']] for n in neighbors]", 1),
-        ("[o for n in neighbors for m in n['neighbors'] for o in m['neighbors']]", 2),
-        ("[x for x in range(3)]", -1),
-    ],
-)
-def test_hop_analysis(expr, hop):
-    assert analyse_expression(expr).max_hop == hop
+# --- evaluation through _safe_eval ------------------------------------------
 
 @pytest.mark.parametrize(
     "name, key",
@@ -428,38 +375,77 @@ def test_hop_analysis(expr, hop):
         ("neighbours", "neighbors"),
     ],
 )
-def test_both_spellings_behave_identically(name, key):
-    """Either spelling works as the namespace name and as the nested key,
-    gives the same result, and counts as one hop beyond neighbours."""
-    statuses = {"a": "S", "b": "I", "c": "S", "d": "I", "e": "S"}
-    population = {k: SimpleNamespace(state={"status": v}) for k, v in statuses.items()}
-    adjacency = {"a": ["b", "c"], "b": ["a", "d", "e"], "c": ["a"]}
-    topology = SimpleNamespace(neighbors=lambda aid: adjacency.get(aid, []))
-
+def test_both_spellings_behave_identically(graph, name, key):
+    """Either spelling works as the name and as the nested key."""
     expr = f"[m['status'] for n in {name} for m in n['{key}']]"
+    assert _safe_eval(expr, graph.focal, graph.views) == ["S", "I", "S", "S"]
 
-    result = evaluate_with_neighbors(
-        expr,
-        agent_id="a",
-        population=population,
-        topology=topology,
+
+def test_single_level_comprehension(graph):
+    expr = "[n['status'] for n in neighbours]"
+    assert _safe_eval(expr, graph.focal, graph.views) == ["I", "S"]
+
+
+def test_two_hop_beyond_evaluates_by_default(graph):
+    """Soft limit only: nesting past one hop warns but still evaluates."""
+    assert _safe_eval(THREE_LEVEL, graph.focal, graph.views) == ["I", "S", "I", "S"]
+
+
+def test_two_hop_beyond_rejected_when_hard_cap_configured(graph):
+    with pytest.raises(ComprehensionDepthError):
+        _safe_eval(
+            THREE_LEVEL, graph.focal, graph.views, sandbox=SandboxConfig(max_hops=1)
+        )
+
+
+def test_comprehension_over_no_neighbours_is_empty(graph):
+    assert _safe_eval("[n['status'] for n in neighbours]", graph.focal, []) == []
+    assert _evaluate_condition(
+        "len([n for n in neighbours]) == 0", graph.focal, []
+    ) is True
+
+
+def test_condition_neighbour_cap_from_config(graph):
+    expr = "len([n for n in neighbours]) > 0"
+    with pytest.raises(NeighborSetTooLargeError):
+        _evaluate_condition(
+            expr, graph.focal, graph.neighbours_of("a"),
+            sandbox=SandboxConfig(max_neighbours=1),  # 'a' has 2 neighbours
+        )
+
+
+def test_condition_hard_hop_cap(graph):
+    expr = (
+        "len([o for n in neighbours for m in n['neighbours'] "
+        "for o in m['neighbours']]) > 0"
     )
+    with pytest.raises(ComprehensionDepthError):
+        _evaluate_condition(
+            expr, graph.focal, graph.neighbours_of("a"),
+            neighbours_of=graph.neighbours_of,
+            sandbox=SandboxConfig(max_hops=1),
+        )
 
-    assert result == ["S", "I", "S", "S"]
-    assert analyse_expression(expr).max_hop == 1
 
-# Test warning when more than two levels
+# --- hop analysis ------------------------------------------------------------
 
-THREE_LEVEL = "[o for n in neighbours for m in n['neighbours'] for o in m['neighbours']]"
+@pytest.mark.parametrize("nb", ["neighbors", "neighbours"])
+@pytest.mark.parametrize(
+    "template, hop",
+    [
+        ("[n for n in {nb}]", 0),
+        ("[m for n in {nb} for m in n['{nb}']]", 1),
+        ("[[m for m in n['{nb}']] for n in {nb}]", 1),
+        ("max(len(n['{nb}']) for n in {nb})", 1),  # needs the _max_hop fix
+        ("[o for n in {nb} for m in n['{nb}'] for o in m['{nb}']]", 2),
+        ("[x for x in range(3)]", -1),
+    ],
+)
+def test_hop_analysis(template, hop, nb):
+    assert analyse_expression(template.format(nb=nb)).max_hop == hop
 
 
-@pytest.fixture(autouse=True)
-def _reset_policy_caches():
-    """Start each test with an empty warn-once set and analysis cache."""
-    reset_policy_caches()
-    yield
-    reset_policy_caches()
-
+# --- warn once ---------------------------------------------------------------
 
 def _hop_warnings(caplog):
     return [r for r in caplog.records if "hops beyond" in r.message]
@@ -474,12 +460,17 @@ def test_hop_warning_logged_once_per_expression(caplog):
 
 
 def test_hop_warning_logged_again_for_a_different_expression(caplog):
-    other = "[p for n in neighbours for m in n['neighbours'] for p in m['neighbours']]"
+    other = (
+        "[p['status'] for n in neighbours for m in n['neighbours'] "
+        "for p in m['neighbours']]"
+    )
     with caplog.at_level(logging.WARNING, logger="simulator"):
         check_comprehension_policy(THREE_LEVEL)
         check_comprehension_policy(other)
     assert len(_hop_warnings(caplog)) == 2
 
+
+# --- caps and config ---------------------------------------------------------
 
 def test_neighbour_cap_uses_configured_value():
     sandbox = SandboxConfig(max_neighbours=3)
@@ -491,3 +482,166 @@ def test_neighbour_cap_uses_configured_value():
 def test_sandbox_config_rejects_invalid_values():
     with pytest.raises(ValueError):
         SandboxConfig(max_neighbours=0)
+
+
+def test_to_config_round_trips_sandbox_limits(base_config):
+    """A custom sandbox section survives from_config -> to_config."""
+    base_config["sandbox"] = {"max_neighbours": 5000}
+    out = Simulation.from_config(base_config).to_config()
+    assert out["sandbox"]["max_neighbours"] == 5000
+    assert out["sandbox"]["max_hops"] is None
+
+
+def test_sandbox_cap_reaches_expression_evaluation(base_config):
+    """max_neighbours from the config must stop an oversized comprehension."""
+    base_config["sandbox"] = {"max_neighbours": 1}
+    base_config["behaviours"] = {
+        "person": [
+            {
+                "expression": 'state["age"] += len([n for n in neighbours])',
+                "topology_name": "contact",
+            }
+        ]
+    }
+    sim = Simulation.from_config(base_config)
+    with pytest.raises(ValueError, match="capped at 1"):
+        sim()
+
+
+def test_one_hop_beyond_works_on_the_rule_path(base_config):
+    """n['neighbours'] must work through the rule path (plain dicts there
+    would raise KeyError)."""
+    base_config["behaviours"] = {
+        "person": [
+            {
+                "field": "age",
+                "expression": (
+                    "state['age'] + len([m for n in neighbours "
+                    "for m in n['neighbours']])"
+                ),
+                "topology_name": "contact",
+            }
+        ]
+    }
+    sim = Simulation.from_config(base_config)
+    result = sim()
+    assert result.stopped is True
+    assert result.reason == "max_steps"
+    assert all(a.state["age"] >= 3 for a in sim.live_population.values())
+
+
+# --- views -------------------------------------------------------------------
+
+def test_views_expose_one_hop_beyond(graph):
+    assert [v["status"] for v in graph.views] == ["I", "S"]
+    assert [m["status"] for m in graph.views[0]["neighbours"]] == ["S", "I", "S"]
+
+
+def test_deeper_hop_is_capped(graph):
+    views = build_views_from_states(
+        graph.neighbours_of("a"), graph.neighbours_of, max_neighbors=2
+    )
+    with pytest.raises(NeighborSetTooLargeError):
+        views[0]["neighbours"]  # b has 3 neighbours
+
+
+# --- conditions --------------------------------------------------------------
+
+@pytest.mark.parametrize("name", ["neighbours", "neighbors"])
+def test_condition_reaches_one_hop_beyond(graph, name):
+    expr = f"len([m for n in {name} for m in n['{name}'] if m['status'] == 'I']) >= 1"
+    assert _evaluate_condition(
+        expr,
+        graph.focal,
+        graph.neighbours_of("a"),
+        neighbours_of=graph.neighbours_of,
+    ) is True
+
+
+def test_uses_neighbours_accepts_both_spellings():
+    assert _uses_neighbours("len([n for n in neighbors]) > 0")
+    assert _uses_neighbours("len([n for n in neighbours]) > 0")
+
+
+# ----------------------------------------
+# Helper function in list comprehension
+# ----------------------------------------
+
+class FakeAgent:
+    """Minimal AgentState stand-in: agent_id, state dict and get()."""
+
+    def __init__(self, agent_id, **state):
+        self.agent_id = agent_id
+        self.state = dict(state)
+
+    def get(self, key):
+        """Return the attribute value, as AgentState.get does."""
+        return self.state[key]
+
+
+@pytest.fixture
+def focal_and_neighbours():
+    """Focal agent plus three neighbours: b (I, 60), c (S, 40), d (I, 50)."""
+    focal = FakeAgent("a", status="S", energy=10)
+    neighbours = [
+        FakeAgent("b", status="I", energy=60),
+        FakeAgent("c", status="S", energy=40),
+        FakeAgent("d", status="I", energy=50),
+    ]
+    return focal, neighbours
+
+
+def evaluate(expr, focal, neighbours):
+    """Evaluate ``expr`` the way evaluate_step does, with the real helpers."""
+    return _safe_eval(
+        expr,
+        focal,
+        [a.state for a in neighbours],
+        make_neighbour_helpers(neighbours),
+    )
+
+
+def test_helper_inside_comprehension(focal_and_neighbours):
+    focal, neighbours = focal_and_neighbours
+    expr = '''[neighbor_count('state["status"] == "I"') for n in neighbours]'''
+    # Helpers are bound to the focal agent's neighbours, so every iteration
+    # sees the same count; n is not involved.
+    assert evaluate(expr, focal, neighbours) == [2, 2, 2]
+
+
+def test_helper_and_comprehension_variable_together(focal_and_neighbours):
+    focal, neighbours = focal_and_neighbours
+    expr = '''[n['energy'] + neighbor_count('state["status"] == "I"') for n in neighbours]'''
+    assert evaluate(expr, focal, neighbours) == [62, 42, 52]
+
+
+def test_helper_and_comprehension_in_one_expression(focal_and_neighbours):
+    focal, neighbours = focal_and_neighbours
+    expr = (
+        '''neighbor_sum('energy', 'state["status"] == "I"') '''
+        '''+ sum(n['energy'] for n in neighbours if n['status'] == 'S')'''
+    )
+    assert evaluate(expr, focal, neighbours) == 150  # (60 + 50) + 40
+
+
+def test_filter_without_state_prefix_is_rejected(focal_and_neighbours):
+    focal, neighbours = focal_and_neighbours
+    expr = '''[neighbor_count('status == "I"') for n in neighbours]'''
+    with pytest.raises(ValueError):
+        evaluate(expr, focal, neighbours)
+
+
+# sandbox must not leak through the new nodes
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        "[n.__class__ for n in neighbours]",
+        "[().__class__.__mro__ for n in neighbours]",
+        "[__import__('os') for n in neighbours]",
+    ],
+)
+def test_comprehension_cannot_reach_dunders_or_imports(graph, expr):
+    with pytest.raises(ValueError):
+        _safe_eval(expr, graph.focal, graph.views)

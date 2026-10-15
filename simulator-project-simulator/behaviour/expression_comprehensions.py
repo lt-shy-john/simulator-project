@@ -126,7 +126,12 @@ def _iter_hop(node: ast.AST, scope: Mapping[str, int]) -> int | None:
 
 
 def _max_hop(node: ast.AST, scope: Mapping[str, int]) -> int:
-    """Recursively compute the deepest neighbour hop under ``node``."""
+    """Recursively compute the deepest neighbour hop under ``node``.
+
+    A neighbour lookup such as ``n['neighbours']`` counts wherever it
+    appears, not only when it is the iterable of a comprehension (so
+    ``len(n['neighbours'])`` inside an elt is hop 1).
+    """
     deepest = -1
     if isinstance(node, COMPREHENSION_NODES):
         inner = dict(scope)
@@ -143,6 +148,10 @@ def _max_hop(node: ast.AST, scope: Mapping[str, int]) -> int:
             for cond in gen.ifs:
                 deepest = max(deepest, _max_hop(cond, inner))
         return max(deepest, _max_hop(node.elt, inner))
+    if isinstance(node, ast.Subscript):
+        hop = _iter_hop(node, scope)
+        if hop is not None:
+            deepest = max(deepest, hop)
     for child in ast.iter_child_nodes(node):
         deepest = max(deepest, _max_hop(child, scope))
     return deepest
@@ -230,42 +239,6 @@ class AgentView(dict):
         raise KeyError(key)
 
 
-def build_neighbor_views(
-    agent_id: str,
-    population: Mapping[str, Any],
-    topology: NeighborSource,
-    *,
-    max_neighbors: int = DEFAULT_MAX_NEIGHBORS,
-) -> list[AgentView]:
-    """Build the neighbour iterable for ``agent_id``.
-
-    Args:
-        agent_id: The focal agent.
-        population: Mapping of agent_id -> object with a ``.state`` dict
-            (e.g. AgentState).
-        topology: Provides ``neighbors(agent_id)``.
-        max_neighbors: Cap applied to every neighbour set, at every hop.
-
-    Raises:
-        NeighborSetTooLargeError: if any neighbour set exceeds the cap.
-    """
-
-    def views_for(aid: str) -> list[AgentView]:
-        ids = [i for i in topology.neighbors(aid) if i in population]
-        if len(ids) > max_neighbors:
-            raise NeighborSetTooLargeError(
-                f"Agent {aid!r} has {len(ids)} neighbours; comprehensions are "
-                f"capped at {max_neighbors}. Use a helper such as "
-                f"neighbor_count(...) instead."
-            )
-        return [make_view(i) for i in ids]
-
-    def make_view(aid: str) -> AgentView:
-        return AgentView(population[aid].state, lambda: views_for(aid))
-
-    return views_for(agent_id)
-
-
 def enable_comprehensions(evaluator: EvalWithCompoundTypes) -> EvalWithCompoundTypes:
     """Whitelist ListComp, GeneratorExp and SetComp on ``evaluator``.
 
@@ -286,30 +259,73 @@ def enable_comprehensions(evaluator: EvalWithCompoundTypes) -> EvalWithCompoundT
     return evaluator
 
 
-def evaluate_with_neighbors(
-    expr: str,
-    *,
-    agent_id: str,
+def build_views_from_ids(
+    neighbour_ids: Iterable[str],
     population: Mapping[str, Any],
-    topology: NeighborSource,
-    functions: Mapping[str, Callable[..., Any]] | None = None,
-    max_hops: int | None = None,
+    neighbours_of: Callable[[str], Iterable[str]],
+    *,
     max_neighbors: int = DEFAULT_MAX_NEIGHBORS,
-) -> Any:
-    """Evaluate ``expr`` in the sandbox with ``state`` and the neighbour names.
+) -> list[AgentView]:
+    """Wrap known neighbour IDs as AgentViews with lazy deeper hops.
 
-    Helper functions (e.g. Ticket 3's ``neighbor_count``) are passed via
-    ``functions`` and may be called inside comprehensions.
+    Args:
+        neighbour_ids: IDs of the focal agent's neighbours (hop 0; the
+            caller or ``_safe_eval`` enforces the cap on this level).
+        population: Mapping of agent_id -> object with a ``.state`` dict.
+            Pass the t-1 snapshot so deeper hops respect the same
+            guarantee as hop 0.
+        neighbours_of: Returns neighbour IDs for any agent ID.
+        max_neighbors: Cap applied to every deeper neighbour set.
+
+    Raises:
+        NeighborSetTooLargeError: lazily, if a deeper hop exceeds the cap.
     """
-    report = check_comprehension_policy(expr, max_hops=max_hops)
-    names: dict[str, Any] = {"state": population[agent_id].state}
-    if report.uses_neighbors:
-        views = build_neighbor_views(
-            agent_id, population, topology, max_neighbors=max_neighbors
-        )
-        for alias in NEIGHBORS_NAMES:
-            names[alias] = views
-    evaluator = enable_comprehensions(
-        EvalWithCompoundTypes(functions=dict(functions or {}), names=names)
-    )
-    return evaluator.eval(expr)
+
+    def views_for(aid: str) -> list[AgentView]:
+        ids = [i for i in neighbours_of(aid) if i in population]
+        if len(ids) > max_neighbors:
+            raise NeighborSetTooLargeError(
+                f"Agent {aid!r} has {len(ids)} neighbours; comprehensions are "
+                f"capped at {max_neighbors}. Raise sandbox.max_neighbours or "
+                f"use a helper such as neighbor_count(...)."
+            )
+        return [make_view(i) for i in ids]
+
+    def make_view(aid: str) -> AgentView:
+        return AgentView(population[aid].state, lambda: views_for(aid))
+
+    return [make_view(i) for i in neighbour_ids if i in population]
+
+
+def build_views_from_states(
+    neighbours: Iterable[Any],
+    neighbours_of: Callable[[str], Iterable[Any]],
+    *,
+    max_neighbors: int = DEFAULT_MAX_NEIGHBORS,
+) -> list[AgentView]:
+    """Wrap AgentState-like neighbours as AgentViews with lazy deeper hops.
+
+    Args:
+        neighbours: Hop-0 neighbours, objects with ``.agent_id`` and
+            ``.state`` (the caller or ``_safe_eval`` caps this level).
+        neighbours_of: Returns neighbour objects for any agent id.
+        max_neighbors: Cap applied to every deeper neighbour set.
+
+    Raises:
+        NeighborSetTooLargeError: lazily, if a deeper hop exceeds the cap.
+    """
+
+    def make_view(agent: Any) -> AgentView:
+        return AgentView(agent.state, lambda: views_for(agent.agent_id))
+
+    def views_for(aid: str) -> list[AgentView]:
+        found = list(neighbours_of(aid))
+        if len(found) > max_neighbors:
+            raise NeighborSetTooLargeError(
+                f"Agent {aid!r} has {len(found)} neighbours; comprehensions are "
+                f"capped at {max_neighbors}. Raise sandbox.max_neighbours or "
+                f"use a helper such as neighbor_count(...)."
+            )
+        return [make_view(a) for a in found]
+
+    return [make_view(a) for a in neighbours]

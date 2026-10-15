@@ -53,9 +53,14 @@ from simpleeval import EvalWithCompoundTypes, InvalidExpression
 from behaviour.expression_steps import NEIGHBOUR_HELPERS, AssignmentStep, ConditionalRule, RuleStep
 from behaviour.neighbour_helpers import make_neighbour_helpers
 from behaviour.expression_comprehensions import (
+    NEIGHBORS_NAMES,
+    AgentView,
     SandboxConfig,
+    analyse_expression,
     check_comprehension_policy,
     check_neighbour_cap,
+    enable_comprehensions,
+    build_views_from_states,
 )
 from runner.state import AgentState
 
@@ -104,6 +109,7 @@ def _safe_eval(
     neighbours_state: list[dict[str, Any]],
     extra_functions: dict[str, Callable[..., Any]] | None = None,
     display: str | None = None,
+    sandbox: SandboxConfig | None = None,
 ) -> Any:
     """Evaluate one pure expression with simpleeval and return its value.
 
@@ -111,29 +117,79 @@ def _safe_eval(
         expression: the expression to evaluate, e.g. 'state["age"] + 1'.
         agent: supplies `state` (a fresh copy, so expressions can't mutate it).
         neighbours_state: read-only list of neighbour state dicts (t-1).
+            Entries may be AgentViews, which allow ``n['neighbours']``.
         extra_functions: additional whitelisted callables, e.g. the
             snapshot-bound neighbour helpers from Ticket 3.
         display: text used in error messages (defaults to `expression`);
             lets the legacy path keep reporting the full original string.
+        sandbox: comprehension limits; defaults to ``SandboxConfig()``.
 
     Raises:
         ValueError: on any unsafe, undefined or syntactically invalid
-            expression, so callers never see simpleeval's own exceptions.
+            expression, a comprehension over too many neighbours, or a
+            configured hard hop cap being exceeded, so callers never see
+            simpleeval's own exceptions.
     """
     shown = display if display is not None else expression
+    sandbox = sandbox or SandboxConfig()
+
+    report = check_comprehension_policy(
+        expression,
+        soft_threshold=sandbox.soft_hop_threshold,
+        max_hops=sandbox.max_hops,
+    )
+    if report.has_comprehension and neighbours_state is not None:
+        check_neighbour_cap(
+            neighbours_state,
+            sandbox.max_neighbours,
+            agent_id=getattr(agent, "agent_id", None),
+        )
+
     context = {
         "state": dict(agent.state),
-        "neighbours": neighbours_state,
+        **{alias: neighbours_state for alias in NEIGHBORS_NAMES},
     }
     functions = {**_SAFE_FUNCTIONS, **(extra_functions or {})}
 
     try:
-        evaluator = EvalWithCompoundTypes(names=context, functions=functions)
+        evaluator = enable_comprehensions(
+            EvalWithCompoundTypes(names=context, functions=functions)
+        )
         return evaluator.eval(expression)
     except InvalidExpression as e:
         raise ValueError(f"Expression '{shown}' failed to evaluate safely: {e}") from e
     except (SyntaxError, NameError) as e:
         raise ValueError(f"Expression '{shown}' failed to evaluate: {e}") from e
+
+
+def _neighbour_views(
+    expression: str,
+    neighbour_agents: list[AgentState],
+    topology_name: str | None,
+    neighbours_for: NeighboursFor,
+    sandbox: SandboxConfig | None,
+) -> list[dict[str, Any]]:
+    """Neighbour state dicts for one step, with lazy deeper hops if needed.
+
+    Plain state dicts are returned unless the expression reaches beyond the
+    first hop (``n['neighbours']`` inside a comprehension), in which case
+    each neighbour becomes an AgentView.
+
+    Args:
+        expression: the expression about to be evaluated.
+        neighbour_agents: the focal agent's neighbours (hop 0).
+        topology_name: the step's topology, used for deeper-hop lookups.
+        neighbours_for: the per-agent lookup from the executor.
+        sandbox: comprehension limits; defaults to ``SandboxConfig()``.
+    """
+    if analyse_expression(expression).max_hop < 1:
+        return [a.state for a in neighbour_agents]
+    limits = sandbox or SandboxConfig()
+    return build_views_from_states(
+        neighbour_agents,
+        lambda aid: neighbours_for(topology_name, aid),
+        max_neighbors=limits.max_neighbours,
+    )
 
 
 def evaluate_expression(
@@ -176,22 +232,13 @@ def evaluate_expression(
     if not match:
         raise ValueError(...)  # unchanged
 
+    sandbox = sandbox or SandboxConfig()
     key = match.group("key")
     op = match.group("op")
-    rhs = match.group("rhs")
-
-    sandbox = sandbox or SandboxConfig()
-    report = check_comprehension_policy(
-        rhs,
-        soft_threshold=sandbox.soft_hop_threshold,
-        max_hops=sandbox.max_hops,
+    rhs_value = _safe_eval(
+        match.group("rhs"), agent, neighbours_state,
+        display=expr, sandbox=sandbox,
     )
-    if report.has_comprehension:
-        check_neighbour_cap(
-            neighbours_state, sandbox.max_neighbours, agent_id=agent.agent_id
-        )
-
-    rhs_value = _safe_eval(rhs, agent, neighbours_state, display=expr)
 
     current_value = agent.get(key) if op != "=" else None
     try:
@@ -205,6 +252,7 @@ def evaluate_step(
     step: AssignmentStep,
     agent: AgentState,
     neighbours_for: NeighboursFor,
+    sandbox: SandboxConfig | None = None,
 ) -> None:
     """Evaluate one plain step and write the result to agent.state[field].
 
@@ -213,6 +261,7 @@ def evaluate_step(
         agent: the AgentState being mutated.
         neighbours_for: resolves topology_name to neighbour AgentState
             snapshots (start-of-step).
+        sandbox: comprehension limits; defaults to ``SandboxConfig()``.
 
     Raises:
         ValueError: if the expression fails to evaluate safely.
@@ -222,8 +271,12 @@ def evaluate_step(
     value = _safe_eval(
         step.expression,
         agent,
-        [a.state for a in neighbour_agents],
+        _neighbour_views(
+            step.expression, neighbour_agents, step.topology_name,
+            neighbours_for, sandbox,
+        ),
         make_neighbour_helpers(neighbour_agents),
+        sandbox=sandbox,
     )
     agent.set(step.field, value)
 
@@ -241,7 +294,7 @@ def _uses_neighbours(expression: str) -> bool:
             and isinstance(n.func, ast.Name)
             and n.func.id in NEIGHBOUR_HELPERS
         )
-        or (isinstance(n, ast.Name) and n.id == "neighbours")
+        or (isinstance(n, ast.Name) and n.id in NEIGHBORS_NAMES)
         for n in ast.walk(ast.parse(expression, mode="eval"))
     )
 
@@ -250,6 +303,7 @@ def run_rule_steps(
     steps: list[RuleStep],
     agent: AgentState,
     neighbours_for: NeighboursFor,
+    sandbox: SandboxConfig | None = None,
 ) -> None:
     """Run a rule's steps in order against one agent.
 
@@ -263,6 +317,8 @@ def run_rule_steps(
         agent: the AgentState being mutated.
         neighbours_for: resolves topology_name to start-of-step neighbour
             AgentState snapshots.
+        sandbox: comprehension limits (neighbour cap, hop warning
+            threshold); defaults to ``SandboxConfig()``.
     """
     from behaviour.condition import _evaluate_condition  # lazy, as in S-10
 
@@ -279,9 +335,11 @@ def run_rule_steps(
                     agent,
                     neighbour_agents,
                     make_neighbour_helpers(neighbour_agents),
+                    sandbox=sandbox,
+                    neighbours_of=lambda aid, name=step.topology_name: neighbours_for(name, aid),
                 )
             else:
                 taken = _evaluate_condition(step.condition, agent)
             stack.append(iter(step.then if taken else step.else_))
         else:
-            evaluate_step(step, agent, neighbours_for)
+            evaluate_step(step, agent, neighbours_for, sandbox=sandbox)

@@ -27,9 +27,10 @@ Design notes:
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Iterable
 from simpleeval import EvalWithCompoundTypes, InvalidExpression
 from typing import Any, Callable, Sequence
+from numpy.random import Generator
 
 from runner.state import AgentState
 from behaviour.expressions import _SAFE_FUNCTIONS
@@ -41,6 +42,7 @@ from behaviour.expression_comprehensions import (
     check_neighbour_cap,
     enable_comprehensions,
 )
+from behaviour.expression_distributions import build_distribution_functions
 
 
 def _evaluate_condition(
@@ -50,17 +52,44 @@ def _evaluate_condition(
     extra_functions: dict[str, Callable[..., Any]] | None = None,
     sandbox: SandboxConfig | None = None,
     neighbours_of: Callable[[str], Iterable[AgentState]] | None = None,
+    rng: Generator | None = None,   # new
 ) -> bool:
     """Evaluate a bare boolean condition against one agent's state.
 
-    ...existing docstring...
-        sandbox: comprehension limits; defaults to ``SandboxConfig()``.
+    The condition runs in the same simpleeval sandbox as assignment
+    expressions. It sees ``state`` (a copy of the agent's state, so the
+    condition cannot mutate it) and, when ``neighbours`` is given, the
+    neighbour list under each name in ``NEIGHBORS_NAMES``.
+
+    Args:
+        expr: the condition text, e.g. 'state["energy"] < 5' or
+            'any(n["infected"] for n in neighbours)'.
+        agent: supplies ``state``.
+        neighbours: start-of-step neighbour AgentState snapshots. When None,
+            no neighbour names are defined and referencing one raises
+            ValueError.
+        extra_functions: additional whitelisted callables, e.g. the
+            snapshot-bound neighbour helpers from Ticket 3.
+        sandbox: comprehension limits (neighbour cap, hop warning
+            threshold, hard hop cap); defaults to ``SandboxConfig()``.
         neighbours_of: returns the neighbours of any agent id, enabling
             ``n['neighbours']`` (one hop beyond) inside comprehensions.
+        rng: the simulation's central generator. When given, the
+            distribution helpers (random, normal, binomial, poisson) are
+            available in the condition: unseeded calls draw from it and
+            seeded calls ignore it. When None (e.g. S-10 stopping
+            conditions), the helpers are not defined and using one raises
+            ValueError.
+
+    Returns:
+        The boolean result of the condition.
 
     Raises:
-        ValueError: ...existing reasons..., or a comprehension exceeding
-            the neighbour cap or a configured hard hop cap.
+        ValueError: if the condition is unsafe, undefined or syntactically
+            invalid, does not evaluate to a bool, uses a distribution helper
+            without ``rng``, has a comprehension over more neighbours than
+            the configured cap, or exceeds a configured hard hop cap. Callers
+            never see simpleeval's own exceptions.
     """
     sandbox = sandbox or SandboxConfig()
     report = check_comprehension_policy(
@@ -85,6 +114,8 @@ def _evaluate_condition(
         for alias in NEIGHBORS_NAMES:
             context[alias] = states
     functions = {**_SAFE_FUNCTIONS, **(extra_functions or {})}
+    if rng is not None:
+        functions.update(build_distribution_functions(rng))
 
     try:
         evaluator = enable_comprehensions(

@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, Callable
+from numpy.random import Generator
 
 import ast
 from functools import lru_cache
@@ -62,6 +63,7 @@ from behaviour.expression_comprehensions import (
     enable_comprehensions,
     build_views_from_states,
 )
+from behaviour.expression_distributions import build_distribution_functions
 from runner.state import AgentState
 
 
@@ -110,6 +112,7 @@ def _safe_eval(
     extra_functions: dict[str, Callable[..., Any]] | None = None,
     display: str | None = None,
     sandbox: SandboxConfig | None = None,
+    rng: Generator | None = None,   # new
 ) -> Any:
     """Evaluate one pure expression with simpleeval and return its value.
 
@@ -123,6 +126,11 @@ def _safe_eval(
         display: text used in error messages (defaults to `expression`);
             lets the legacy path keep reporting the full original string.
         sandbox: comprehension limits; defaults to ``SandboxConfig()``.
+        rng: the simulation's central generator. When given, the
+            distribution helpers (random, normal, binomial, poisson) are
+            available to the expression. Unseeded calls draw from it;
+            seeded calls ignore it. When None, the helpers are not
+            defined and using one raises ValueError.
 
     Raises:
         ValueError: on any unsafe, undefined or syntactically invalid
@@ -150,6 +158,8 @@ def _safe_eval(
         **{alias: neighbours_state for alias in NEIGHBORS_NAMES},
     }
     functions = {**_SAFE_FUNCTIONS, **(extra_functions or {})}
+    if rng is not None:
+        functions.update(build_distribution_functions(rng))
 
     try:
         evaluator = enable_comprehensions(
@@ -197,6 +207,7 @@ def evaluate_expression(
     agent: AgentState,
     neighbours_state: list[dict[str, Any]],
     sandbox: SandboxConfig | None = None,
+    rng: Generator | None = None,
 ) -> None:
     """Parse and execute one assignment-style expression against agent.state.
 
@@ -215,6 +226,9 @@ def evaluate_expression(
             function — same t-1 guarantee as NeighbourAccessor.read().
         sandbox: comprehension limits (neighbour cap, hop warning
             threshold); defaults to ``SandboxConfig()``.
+        rng: the simulation's central generator. When given, the
+            distribution helpers (random, normal, binomial, poisson) are
+            available to the expression.
 
     Raises:
         ValueError: if expr doesn't match the required
@@ -237,7 +251,7 @@ def evaluate_expression(
     op = match.group("op")
     rhs_value = _safe_eval(
         match.group("rhs"), agent, neighbours_state,
-        display=expr, sandbox=sandbox,
+        display=expr, sandbox=sandbox, rng=rng,
     )
 
     current_value = agent.get(key) if op != "=" else None
@@ -253,6 +267,7 @@ def evaluate_step(
     agent: AgentState,
     neighbours_for: NeighboursFor,
     sandbox: SandboxConfig | None = None,
+    rng: Generator | None = None,
 ) -> None:
     """Evaluate one plain step and write the result to agent.state[field].
 
@@ -262,6 +277,9 @@ def evaluate_step(
         neighbours_for: resolves topology_name to neighbour AgentState
             snapshots (start-of-step).
         sandbox: comprehension limits; defaults to ``SandboxConfig()``.
+        rng: the simulation's central generator. When given, the
+            distribution helpers (random, normal, binomial, poisson) are
+            available to the expression.
 
     Raises:
         ValueError: if the expression fails to evaluate safely.
@@ -277,6 +295,7 @@ def evaluate_step(
         ),
         make_neighbour_helpers(neighbour_agents),
         sandbox=sandbox,
+        rng=rng,
     )
     agent.set(step.field, value)
 
@@ -304,6 +323,7 @@ def run_rule_steps(
     agent: AgentState,
     neighbours_for: NeighboursFor,
     sandbox: SandboxConfig | None = None,
+    rng: Generator | None = None,
 ) -> None:
     """Run a rule's steps in order against one agent.
 
@@ -319,6 +339,9 @@ def run_rule_steps(
             AgentState snapshots.
         sandbox: comprehension limits (neighbour cap, hop warning
             threshold); defaults to ``SandboxConfig()``.
+        rng: the simulation's central generator, forwarded to every
+            condition and assignment so the distribution helpers work in
+            if-conditions and in then/else blocks.
     """
     from behaviour.condition import _evaluate_condition  # lazy, as in S-10
 
@@ -337,9 +360,10 @@ def run_rule_steps(
                     make_neighbour_helpers(neighbour_agents),
                     sandbox=sandbox,
                     neighbours_of=lambda aid, name=step.topology_name: neighbours_for(name, aid),
+                    rng=rng,  # new
                 )
             else:
-                taken = _evaluate_condition(step.condition, agent)
+                taken = _evaluate_condition(step.condition, agent, rng=rng)  # new
             stack.append(iter(step.then if taken else step.else_))
         else:
-            evaluate_step(step, agent, neighbours_for, sandbox=sandbox)
+            evaluate_step(step, agent, neighbours_for, sandbox=sandbox, rng=rng)  # new

@@ -1,0 +1,640 @@
+---
+title: Behaviour Expressions
+description: Describe how your agents behave using short rules, without writing code.
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
+
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+
+## The idea
+
+Picture a small village. Every morning, each villager follows a short card of
+instructions:
+
+> Add a year to my age. If I'm 65 or older, I retire. If at least two of my
+> neighbours are ill, I might catch it too.
+
+A **behaviour rule** is exactly that card, written for an agent. You write it once,
+and every agent of that type follows it at every step of the simulation.
+
+Rules are made of **expressions**: short, one-line calculations such as
+`state['age'] + 1`. You don't need to write any Python to use them.
+
+<Callout title="One thing to remember" type="info">
+	A rule can only change the agent that is following it. It can *look at* its neighbours,
+	but it can't change them. Think of it as updating your own diary: you can read your
+	neighbours' diaries, but you can't write in them.
+</Callout>
+
+### Expressions or modules?
+
+There are two methods to code the agent's behaviour: expressions or modules. Most behaviour fits in a expression rules. The syntax of expressions is formulated like normal scripting. 
+For the rest, you can write a **module** (a piece of Python code).
+
+| | Rule (expression) | Module (code) |
+|---|---|---|
+| Written as | A line of text in your config | A Python class |
+| Best for | Changing your own attributes, reacting to neighbours, random events | Anything a rule can't do |
+| Can read neighbours | Yes | Yes |
+| Can change neighbours | No | Yes, using `NeighbourAccessor` with deferred writes |
+| Needs a code change | No | Yes |
+
+Start with a rule. Move to a module only when you need to change another agent, such as
+passing energy from one agent to another.
+
+---
+
+## Your first rule
+
+Rules live in the `behaviours` section of your config, as a list for each agent type.
+
+```json
+"behaviours":{
+   "human":[
+      {
+         "field":"age",
+         "expression":"state['age'] + 1"
+      }
+   ]
+}
+```
+
+Reading it aloud: *"Every step, set my `age` to my current `age` plus one."*
+
+<Callout title="Two things trip up most newcomers" type="warn">
+	- **Read your own attributes with `state['name']`.** Writing `age + 1` on its own
+	doesn't work.
+	- **Write the new value, not the update.** Use `state['age'] + 1`, not
+	`state['age'] += 1`. An expression calculates a value; the `field` says where it goes.
+</Callout>
+
+---
+
+## Writing rules
+
+### Steps
+
+A rule is a list of **steps**. They run from top to bottom, like the lines of a recipe.
+
+There are two kinds of step.
+
+**Plain step.** Calculate a value and store it in one field.
+
+| Key | Type | Description |
+|---|---|---|
+| `field` | text, required | The attribute to change. It must already exist on the agent type. A rule can't create new attributes. |
+| `expression` | text, required | The calculation that gives the new value. |
+| `topology_name` | text, optional | Which topology supplies the neighbours. Only needed when the expression uses neighbours (see [Choosing a topology](#choosing-a-topology)). |
+
+**Conditional step.** Ask a yes/no question, then do one thing or another.
+
+| Key | Type | Description |
+|---|---|---|
+| `condition` | text, required | An expression that gives `True` or `False`. |
+| `then` | list of steps, required | What to do when the answer is yes. |
+| `else` | list of steps, optional | What to do when the answer is no. Leave it out to do nothing. |
+| `topology_name` | text, optional | Which topology the condition uses. It applies to the condition only. |
+
+<Callout title="Typos are caught early" type="info">
+	If you write a key that doesn't exist, such as `elze` instead of `else`, the config is
+	rejected instead of the typo being silently ignored.
+</Callout>
+
+### Order matters
+
+Each step sees the results of the steps before it. This works like checking your
+birthday card after you have just added a year:
+
+```json
+"human":[
+   {
+      "field":"age",
+      "expression":"state['age'] + 1"
+   },
+   {
+      "condition":"state['age'] >= 65",
+      "then":[
+         {
+            "field":"employed",
+            "expression":"False"
+         }
+      ],
+      "else":[
+         {
+            "field":"weight_kg",
+            "expression":"state['weight_kg'] - 1"
+         }
+      ]
+   }
+]
+```
+
+An agent aged 64 becomes 65 in the first step. The condition then sees 65, so the
+`then` branch runs.
+
+A `then` or `else` branch can hold several steps, and can contain more conditional
+steps. Nest as deeply as you need to. If you nest `else` very deeply, a warning is
+logged, but the rule still runs.
+
+### Either/ or in one line
+
+If you only need to choose between two values, a conditional expression is shorter:
+
+```json
+{ "field": "status", "expression": "'R' if state['days_infected'] > 10 else 'I'" }
+```
+
+Only the chosen side is calculated. The other side is never run, so it can't cause
+an error.
+
+### Counting steps
+
+Rules can't read the current step number directly. To do something every few steps,
+keep your own counter, like a calendar you tick off each day.
+
+Say agents should age by one year every 5 steps. Give the agent type an attribute
+`steps_since_birthday` that starts at `0`, then:
+
+```json
+"human":[
+   {
+      "field":"steps_since_birthday",
+      "expression":"state['steps_since_birthday'] + 1"
+   },
+   {
+      "condition":"state['steps_since_birthday'] >= 5",
+      "then":[
+         {
+            "field":"age",
+            "expression":"state['age'] + 1"
+         },
+         {
+            "field":"steps_since_birthday",
+            "expression":"0"
+         }
+      ]
+   }
+]
+```
+
+The counter goes 1, 2, 3, 4, 5. On the fifth step the condition is true, so the agent
+ages a year and the counter resets to 0. That happens at steps 5, 10, 15 and so on.
+
+<Callout title="Why this works" type="info">
+	Each step sees the changes made by the steps before it, so the condition sees the
+	counter that was just increased.
+</Callout>
+
+### Older formats still work
+
+Two older forms are still accepted at the top level of a behaviour list, with no
+changes needed:
+
+- A single statement-style string, such as `{"expression": "state['x'] += 1"}`.
+- A module entry, such as `{"module": ..., "params": ...}`.
+
+The statement style (`+=`) is only valid there. Inside `then` and `else`, always
+write the pure form.
+
+---
+
+## Looking at neighbours
+
+Agents often care about the people around them. Who is ill? How much energy do they
+have? You can ask with a **neighbour helper**.
+
+### The five helpers
+
+Think of each helper as a question you'd ask the people next door.
+
+| Helper | The question | Returns |
+|---|---|---|
+| `neighbor_count(filter)` | "How many of you…?" | A number |
+| `neighbor_mean(attr, filter)` | "What's your average…?" | A number |
+| `neighbor_sum(attr, filter)` | "What's your total…?" | A number |
+| `neighbor_any(filter)` | "Is at least one of you…?" | `True` or `False` |
+| `neighbor_all(filter)` | "Are all of you…?" | `True` or `False` |
+
+**Parameters**
+
+- **`attr`** : *text*. The attribute to average or add up, such as `'energy'`.
+- **`filter`** : *text, optional*. Narrows the question to neighbours that match. Leave
+it out and every neighbour counts. It is required for `neighbor_any` and
+`neighbor_all`.
+
+A filter is written like a condition, reading values with `state[...]`. Because it sits
+inside another piece of text, use two different kinds of quote marks:
+
+```
+neighbor_count("state['status'] == 'I'")
+```
+
+<Callout title="Filters can't contain helpers" type="info">
+	You can't put a helper inside a filter. To ask a question about each neighbour's own
+	neighbours, use a [comprehension](#comprehensions).
+</Callout>
+
+### Examples
+
+A neighbour who shares energy:
+
+```json
+{
+"condition": "state['energy'] < 50",
+  "then": [
+    {
+      "field": "energy",
+      "expression": "state['energy'] + 0.1 * max(0, neighbor_mean('energy') - state['energy'])",
+      "topology_name": "contact"
+    }
+  ],
+  "else": [{ "field": "energy", "expression": "state['energy'] - 0.5" }]
+}
+```
+
+*"If I'm low on energy, move 10% of the way towards my neighbours' average. Otherwise,
+I use up half a unit."* Note that this only raises *my* energy. Nothing is taken from
+my neighbours.
+
+Catching an illness from any infected neighbour:
+
+```json
+{
+  "condition": "neighbor_any(\"state['status'] == 'I'\")",
+  "then": [{ "field": "status", "expression": "'I'" }]
+}
+```
+
+### What if there's nobody to ask?
+
+An agent with no neighbours, or no neighbours that match the filter, still gets an
+answer. These answers are worth knowing:
+
+| Helper | With no matching neighbours |
+|---|---|
+| `neighbor_count` | `0` |
+| `neighbor_sum` | `0` |
+| `neighbor_mean` | `0.0` |
+| `neighbor_any` | `False` |
+| `neighbor_all` | **`True`** |
+
+<Callout title="Watch out: neighbor_all with no neighbours" type="warn">
+	`neighbor_all` is `True` when there are no neighbours at all. An isolated agent is
+	"surrounded by infected neighbours" in the same way an empty room is "full of
+	sleeping people". If that isn't what you want, check for neighbours first:
+
+	```
+	neighbor_count() > 0 and neighbor_all("state['status'] == 'I'")
+	```
+</Callout>
+
+### Choosing a topology
+
+A **topology** decides who counts as a neighbour. It could be everyone, a random
+sample, or a network of connections.
+
+- **One topology (or none):** you never need to name it.
+- **Two or more topologies:** every step or condition that uses a neighbour helper (or
+the `neighbours` list, below) must say which one with `topology_name`. Leaving it
+out is an error, so there is no guessing.
+
+The helpers work the same way on every topology. Naming a topology you already have is
+fine. Naming one that doesn't exist is an error.
+
+### Who sees what, and when
+
+When the schedule's `read_mode` is `"frozen"`, everyone reads their neighbours as they
+were at the **start of the step**, like looking at a photo taken at sunrise. It
+doesn't matter which agent goes first. With `"live"`, neighbours are read as they are
+right now.
+
+Your own changes are always visible straight away to your own later steps.
+
+<Callout title="To confirm" type="warn">
+	Whether rule steps should always use the start-of-step snapshot, regardless of
+	`read_mode`, hasn't been decided yet.
+</Callout>
+
+---
+
+## Comprehensions
+
+*(advanced)*
+
+Helpers cover the common questions. Sometimes you need to ask something they can't,
+for example "what is the highest energy among my neighbours?" or "who are my friends'
+friends?". For that, every rule can read `neighbours`: a list with one entry per
+neighbour, each holding that neighbour's attributes. A **comprehension** is a compact
+way to go through that list.
+
+<Callout title="Rule of thumb" type="info">
+	Reach for a helper first. They are easier to read and quicker to run. Use a
+	comprehension as the escape hatch for questions a helper can't express.
+</Callout>
+
+### Same question, two ways
+
+<Cards>
+	<Card title="Helper">
+
+		```
+		neighbor_count("state['status'] == 'I'")
+		```
+
+		Short, and does one job well.
+
+	</Card>
+	<Card title="Comprehension">
+
+		```
+		len([n for n in neighbours if n['status'] == 'I'])
+		```
+
+		Longer, but it gives you each neighbour as `n`, so you can do much more with it.
+
+	</Card>
+</Cards>
+
+Inside a comprehension, `n` is one neighbour's attributes, read as `n['status']`. In
+a helper filter you'd write `state['status']` instead.
+
+### Things only a comprehension can do
+
+| What you want | Expression |
+|---|---|
+| The highest energy among neighbours | `max(n['energy'] for n in neighbours)` |
+| Each neighbour's own number of neighbours | `max(len(n['neighbours']) for n in neighbours)` |
+| The statuses of my friends' friends | `[m['status'] for n in neighbours for m in n['neighbours']]` |
+| Any friend-of-friend infected? | `len([m for n in neighbours for m in n['neighbours'] if m['status'] == 'I']) >= 1` |
+| A helper and a loop in one line | `neighbor_sum('energy', "state['status'] == 'I'") + sum(n['energy'] for n in neighbours if n['status'] == 'S')` |
+
+You can write list, set and generator comprehensions. You can spell the name
+`neighbours` or `neighbors`.
+
+<Callout title="Helpers always talk about you" type="warn">
+	A helper inside a comprehension always asks about *your* neighbours, never about the
+	loop variable `n`. So `[neighbor_count("...") for n in neighbours]` repeats the same
+	number once per neighbour.
+</Callout>
+
+### How far can you reach?
+
+| Written as | Means |
+|---|---|
+| `neighbours` | Your neighbours |
+| `n['neighbours']` | That neighbour's neighbours (one hop beyond) |
+| `m['neighbours']` inside that | Two hops beyond |
+
+You must write a second hop as a comprehension. `neighbours[0]['neighbours']` is not
+supported.
+
+Comprehensions work in assignment expressions and in conditions.
+
+<Callout title="Not inside filter strings" type="info">
+	The filter text given to a helper is checked against one neighbour at a time, so it
+	can't contain a comprehension over `neighbours`.
+</Callout>
+
+### The cost of reaching further
+
+Each extra hop multiplies the work. If everyone knows 100 people, one hop is about
+100 lookups per agent, and two hops is about 10,000. You are allowed to nest further,
+but a warning is logged (once per expression, not once per evaluation).
+
+You can tune this with an optional `sandbox` section in your config:
+
+```json
+"sandbox": { "max_neighbours": 1000, "soft_hop_threshold": 1, "max_hops": null }
+```
+
+**Parameters**
+
+- **`max_neighbours`** : *integer, at least 1, default 1000*. If an agent has more
+neighbours than this and the expression contains a comprehension, the run stops with
+an error telling you to use a helper or raise the limit.
+- **`soft_hop_threshold`** : *integer, at least 0, default 1*. How many hops beyond
+`neighbours` are allowed before the warning appears.
+- **`max_hops`** : *integer or `null`, default `null`*. With `null`, deeper nesting
+only warns. With a number, deeper nesting is rejected.
+
+You can leave any of these out to keep the default.
+
+---
+
+## Randomness
+
+Real life has surprises: a chance of catching a cold, a random delay, an unpredictable
+amount of rain. Rules can draw random numbers, so you don't need a module for these.
+
+### The four helpers
+
+| Helper | Think of it as | Returns | Must satisfy |
+|---|---|---|---|
+| `random(seed=None)` | Spinning a wheel from 0 to 1 | A decimal from 0 up to (not including) 1 | Nothing |
+| `normal(mean, std, seed=None)` | A bell curve of typical values | A decimal | `std` at least 0 |
+| `binomial(n, p, seed=None)` | Flipping `n` coins that each land heads with chance `p` | A whole number | `n` a whole number at least 0, `p` between 0 and 1 |
+| `poisson(lam, seed=None)` | Counting how many events happen in a period | A whole number | `lam` at least 0 |
+
+They work wherever an expression works: steps, conditions, `then` and `else`, and
+comprehensions.
+
+Only these four are available. Other functions from `random` or `numpy.random` can't
+be used.
+
+### Examples
+
+A 5% chance of something happening each step:
+
+```json
+{
+"condition": "random() < 0.05",
+  "then": [{ "field": "status", "expression": "'I'" }]
+}
+```
+
+A random amount lost each step, usually around 1.5:
+
+```json
+{ "field": "energy", "expression": "state['energy'] - normal(1.5, 0.3)" }
+```
+
+The more infected neighbours, the higher the chance of infection (each one gives a
+10% chance of passing it on):
+
+```json
+{
+  "condition": "random() < 1 - 0.9 ** len([n for n in neighbours if n['status'] == 'I'])",
+  "then": [{ "field": "status", "expression": "'I'" }]
+}
+```
+
+### Repeatable results
+
+Simulations are much easier to trust when a run can be repeated exactly. There are two
+ways random calls behave.
+
+<Cards>
+	<Card title="Unseeded">
+
+		```
+		random()
+		normal(0, 1)
+		```
+
+		Imagine one long, pre-written list of random numbers, fixed by the `seed` at the top
+		of your config. Every unseeded call takes the next number on the list.
+
+		- Each call gets a different value, for each agent and each step.
+		- Running the same config with the same `seed` replays the same list, so you get exactly
+		the same results.
+		- A different `seed` gives a different list.
+
+	</Card>
+	<Card title="Seeded">
+
+		```
+		random(seed=3)
+		normal(0, 1, seed=7)
+		```
+
+		Imagine a die that always lands on the same face. Each seeded call builds its own
+		private generator from the seed you give it.
+
+		- The same call always gives the same value, whatever the run's `seed` or call order.
+		- It never touches the shared list, so unseeded calls elsewhere aren't affected.
+
+	</Card>
+</Cards>
+
+You can pass `seed` by name (`normal(0, 1, seed=7)`) or as the last argument.
+
+<Callout title="Seeded calls inside a comprehension" type="warn">
+	A seeded call gives the same value every time, so `random(seed=1)` inside a
+	comprehension gives the *same* number for every neighbour. Use unseeded calls when each
+	agent or neighbour should draw its own number.
+</Callout>
+
+<Callout title="Adding a random rule changes later random events in the run" type="info">
+	Unseeded calls share their list of numbers with agent scheduling order and lifecycle
+	events. If you add a rule that uses `random()`, those later events draw different
+	numbers than before, so a run won't match one made without the rule. Rules that don't
+	draw random numbers are unaffected.
+</Callout>
+
+  ---
+
+  ## Troubleshooting Guide
+
+  When something goes wrong, the following table may assist you.
+
+  | What happened | What you'll see |
+  |---|---|
+  | The expression has a syntax error | The config is rejected when it is built |
+  | An unknown key, such as `elze` | The config is rejected when it is built |
+  | `topology_name` is missing, with two or more topologies | The config is rejected when it is built |
+  | `topology_name` names a topology that doesn't exist | The config is rejected |
+  | `field` isn't an attribute of the agent type | A `KeyError` when the rule runs |
+  | An unknown name, a disallowed operation, or a condition that isn't `True`/`False` | A `ValueError` |
+  | A comprehension over more than `max_neighbours` neighbours | `NeighborSetTooLargeError` (a `ValueError`) |
+  | Nesting deeper than `max_hops` | `ComprehensionDepthError` (a `ValueError`) |
+  | Invalid numbers for a random helper, such as `binomial(10, 2)` | A `ValueError` naming the helper |
+  | A bad `seed` (not a whole number, or `True`/`False`), or the wrong number of arguments | A `TypeError` |
+
+  ### Stopping conditions are different
+
+  Stopping conditions in `stopping.conditions` are checked against the whole model and
+  have their own, smaller toolbox. They can use aggregates such as `model.count(...)`,
+  but they **can't** use random helpers. If one does, the run ends at the end of the first
+  step with stop reason `error`.
+
+  ---
+
+  ## Quick reference
+
+  For every function, its arguments and what it raises, see the
+  [reference page](/docs/behaviour-expression-reference).
+
+  <Accordions>
+	<Accordion title="Rule structure">
+
+		```json
+		{ "field": "age", "expression": "state['age'] + 1", "topology_name": "contact" }
+		```
+
+		```json
+		{
+		"condition": "state['age'] >= 65",
+		"then": [ ],
+		"else": [ ],
+		"topology_name": "contact"
+		}
+		```
+
+	</Accordion>
+	<Accordion title="Neighbour helpers">
+
+		| Helper | Returns |
+		|---|---|
+		| `neighbor_count(filter)` | How many neighbours match |
+		| `neighbor_mean(attr, filter)` | Average of `attr` |
+		| `neighbor_sum(attr, filter)` | Total of `attr` |
+		| `neighbor_any(filter)` | At least one matches |
+		| `neighbor_all(filter)` | All match (`True` if no neighbours) |
+
+	</Accordion>
+	<Accordion title="Random helpers">
+
+		| Helper | Returns |
+		|---|---|
+		| `random()` | Decimal from 0 to under 1 |
+		| `normal(mean, std)` | Decimal from a bell curve |
+		| `binomial(n, p)` | Whole number of successes |
+		| `poisson(lam)` | Whole number of events |
+
+		Add `seed=...` to any of them for a repeatable value.
+	</Accordion>
+	<Accordion title="Built-in functions">
+
+		`any`, `all`, `sum`, `len`, `min`, `max`, `abs` and `round`. No others are available.
+
+	</Accordion>
+	<Accordion title="Sandbox limits">
+
+		```json
+		"sandbox": { "max_neighbours": 1000, "soft_hop_threshold": 1, "max_hops": null }
+		```
+
+	</Accordion>
+</Accordions>
+
+---
+
+## For contributors
+
+### Adding a new distribution
+
+The set of random helpers is deliberately fixed. To add one, such as `exponential` or
+`beta`:
+
+<Steps>
+	<Step>
+		Write a draw function in `behaviour/distributions.py`. It takes the NumPy
+		`Generator` first, then the distribution's parameters. Validate the arguments and
+		return a plain Python `int` or `float`.
+	</Step>
+	<Step>
+		Register it with `@distribution("exponential")`. The optional `seed` argument is
+		added for you.
+	</Step>
+	<Step>
+		Add tests for the shape (a statistical sanity check), unseeded repeatability,
+		seeded repeatability and argument validation.
+	</Step>
+	<Step>
+		Add the helper to the table in [Randomness](#randomness).
+	</Step>
+</Steps>

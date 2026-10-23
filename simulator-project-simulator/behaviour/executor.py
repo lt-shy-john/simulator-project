@@ -224,6 +224,7 @@ def run_step(
                     agent,
                     _make_neighbours_for(agent, read_source, neighbour_cache),
                     sandbox=sandbox,
+                    rng=model.rng,
                 )
                 changed = {
                     k: (before[k], v) for k, v in agent.state.items() if before[k] != v
@@ -254,7 +255,7 @@ def run_step(
                     max_neighbors=(sandbox or SandboxConfig()).max_neighbours,
                 )
                 before = dict(agent.state)
-                evaluate_expression(entry.expr, agent, neighbours_state, sandbox=sandbox)
+                evaluate_expression(entry.expr, agent, neighbours_state, sandbox=sandbox, rng=model.rng,)
                 changed = {
                     k: (before[k], v) for k, v in agent.state.items() if before[k] != v
                 }

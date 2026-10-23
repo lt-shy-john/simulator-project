@@ -1,7 +1,10 @@
 import pytest
+import numpy as np
 import uuid
 import random
 import logging
+import copy
+from simpleeval import EvalWithCompoundTypes
 from typing import Any
 from types import SimpleNamespace
 
@@ -16,6 +19,12 @@ from behaviour.expression_comprehensions import (
     check_comprehension_policy,
     check_neighbour_cap,
     reset_policy_caches,
+)
+from behaviour import expression_distributions as dist  # for monkey patching
+from behaviour.expression_distributions import (
+    available_distributions,
+    build_distribution_functions,
+    distribution,
 )
 from behaviour.condition import _evaluate_condition
 from behaviour.neighbour_helpers import make_neighbour_helpers
@@ -645,3 +654,651 @@ def test_filter_without_state_prefix_is_rejected(focal_and_neighbours):
 def test_comprehension_cannot_reach_dunders_or_imports(graph, expr):
     with pytest.raises(ValueError):
         _safe_eval(expr, graph.focal, graph.views)
+
+"""
+RNG
+"""
+
+N_SAMPLES = 20_000
+
+
+def make_helpers(run_seed: int = 42) -> dict:
+    """Build helpers bound to a fresh RNG for the given run seed."""
+    return build_distribution_functions(np.random.default_rng(run_seed))
+
+
+def simulate_run(run_seed: int) -> list:
+    """Mimic a full run: a fixed sequence of unseeded draws."""
+    h = make_helpers(run_seed)
+    out = []
+    for _ in range(50):
+        out += [h["random"](), h["normal"](0, 1), h["binomial"](10, 0.5), h["poisson"](3)]
+    return out
+
+
+# ---- registry -------------------------------------------------------------
+
+
+def test_helper_set_is_fixed():
+    assert set(available_distributions()) == {"random", "normal", "binomial", "poisson"}
+    assert set(make_helpers()) == set(available_distributions())
+
+
+def test_extension_via_registry(monkeypatch):
+    monkeypatch.setattr(dist, "_REGISTRY", dict(dist._REGISTRY))
+
+    @distribution("exponential")
+    def _exponential(rng, scale):
+        return float(rng.exponential(scale))
+
+    h = make_helpers()
+    assert h["exponential"](2.0, seed=1) == h["exponential"](2.0, seed=1)
+
+
+# ---- determinism ----------------------------------------------------------
+
+
+def test_unseeded_deterministic_across_full_runs():
+    assert simulate_run(123) == simulate_run(123)
+
+
+def test_unseeded_differs_for_different_run_seed():
+    assert simulate_run(123) != simulate_run(124)
+
+
+@pytest.mark.parametrize(
+    "name,args",
+    [("random", ()), ("normal", (0, 1)), ("binomial", (10, 0.5)), ("poisson", (3,))],
+)
+def test_seeded_deterministic_per_invocation(name, args):
+    h = make_helpers()
+    first = h[name](*args, seed=7)
+    assert all(h[name](*args, seed=7) == first for _ in range(20))
+    assert h[name](*args, 7) == first  # positional seed form
+
+
+def test_seeded_independent_of_run_seed():
+    assert make_helpers(1)["normal"](0, 1, seed=7) == make_helpers(2)["normal"](0, 1, seed=7)
+
+
+def test_seeded_calls_do_not_advance_shared_stream():
+    plain, mixed = make_helpers(5), make_helpers(5)
+    expected = [plain["random"]() for _ in range(10)]
+    actual = []
+    for _ in range(10):
+        mixed["random"](seed=99)
+        actual.append(mixed["random"]())
+    assert actual == expected
+
+
+def test_different_seeds_give_different_values():
+    h = make_helpers()
+    assert h["random"](seed=1) != h["random"](seed=2)
+
+
+# ---- distribution shape (fixed seed, so these cannot flake) ----------------
+
+
+def test_random_shape():
+    h = make_helpers(2024)
+    xs = np.array([h["random"]() for _ in range(N_SAMPLES)])
+    assert xs.min() >= 0.0 and xs.max() < 1.0
+    assert xs.mean() == pytest.approx(0.5, abs=0.02)
+
+
+def test_normal_shape():
+    h = make_helpers(2024)
+    xs = np.array([h["normal"](10, 2) for _ in range(N_SAMPLES)])
+    assert xs.mean() == pytest.approx(10, abs=0.1)
+    assert xs.std() == pytest.approx(2, abs=0.1)
+
+
+def test_binomial_shape():
+    h = make_helpers(2024)
+    xs = np.array([h["binomial"](20, 0.3) for _ in range(N_SAMPLES)])
+    assert xs.min() >= 0 and xs.max() <= 20
+    assert xs.mean() == pytest.approx(6.0, abs=0.1)
+    assert xs.var() == pytest.approx(4.2, abs=0.3)
+
+
+def test_poisson_shape():
+    h = make_helpers(2024)
+    xs = np.array([h["poisson"](4) for _ in range(N_SAMPLES)])
+    assert xs.min() >= 0
+    assert xs.mean() == pytest.approx(4.0, abs=0.1)
+    assert xs.var() == pytest.approx(4.0, abs=0.3)
+
+
+def test_return_types_are_native_python():
+    h = make_helpers()
+    assert type(h["random"]()) is float
+    assert type(h["normal"](0, 1)) is float
+    assert type(h["binomial"](5, 0.5)) is int
+    assert type(h["poisson"](2)) is int
+
+
+# ---- validation -----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name,args",
+    [
+        ("normal", (0, -1)),
+        ("normal", (0, float("nan"))),
+        ("binomial", (-1, 0.5)),
+        ("binomial", (5.5, 0.5)),
+        ("binomial", (5, 1.5)),
+        ("binomial", (5, float("nan"))),
+        ("poisson", (-0.1,)),
+    ],
+)
+def test_invalid_arguments_raise_value_error(name, args):
+    with pytest.raises(ValueError):
+        make_helpers()[name](*args)
+
+
+@pytest.mark.parametrize("bad_seed", ["abc", 1.5, True])
+def test_invalid_seed_raises_type_error(bad_seed):
+    with pytest.raises(TypeError):
+        make_helpers()["random"](seed=bad_seed)
+
+
+def test_wrong_arity_raises_type_error():
+    with pytest.raises(TypeError):
+        make_helpers()["normal"](0)
+    with pytest.raises(TypeError):
+        make_helpers()["normal"](0, 1, 2, 3)
+    with pytest.raises(TypeError):
+        make_helpers()["normal"](0, 1, 2, seed=3)  # seed given twice
+
+
+# ---- inside the sandbox ---------------------------------------------------
+
+
+def make_evaluator(names: dict | None = None, run_seed: int = 42) -> EvalWithCompoundTypes:
+    """Sandbox evaluator with the distribution helpers installed."""
+    return EvalWithCompoundTypes(
+        names=names or {}, functions=make_helpers(run_seed)
+    )
+
+
+def test_helpers_usable_in_ternary():
+    ev = make_evaluator()
+    assert ev.eval("1 if random(seed=3) < 2 else 0") == 1
+
+
+def test_helpers_usable_in_comprehension_unseeded_are_independent():
+    ev = make_evaluator({"neighbours": list(range(50))})
+    draws = ev.eval("[random() for n in neighbours]")
+    assert len(set(draws)) == 50
+
+
+def test_seeded_in_comprehension_repeats_same_value():
+    ev = make_evaluator({"neighbours": list(range(10))})
+    draws = ev.eval("[random(seed=5) for n in neighbours]")
+    assert len(set(draws)) == 1
+
+
+def test_comprehension_infection_pattern_is_run_deterministic():
+    """The same run seed yields the same infected set from a comprehension."""
+    expr = "[n for n in neighbours if random() < 0.3]"
+    names = {"neighbours": list(range(200))}
+    first = make_evaluator(names, 9).eval(expr)
+    second = make_evaluator(names, 9).eval(expr)
+    assert first == second
+    assert 0 < len(first) < 200
+
+
+def test_unknown_helper_is_not_available():
+    from simpleeval import FunctionNotDefined
+
+    with pytest.raises(FunctionNotDefined):
+        make_evaluator().eval("exponential(1.0)")
+
+# helper
+
+class StubAgent:
+    """Minimal stand-in for AgentState (swap for your real fixture)."""
+
+    def __init__(self, state: dict[str, Any], agent_id: int = 1) -> None:
+        """Create a stub agent with the given state."""
+        self.state = dict(state)
+        self.agent_id = agent_id
+
+    def get(self, key: str) -> Any:
+        """Return one state value."""
+        return self.state[key]
+
+    def set(self, key: str, value: Any) -> None:
+        """Set one state value."""
+        self.state[key] = value
+
+
+def rng_for(seed: int) -> np.random.Generator:
+    """Return a fresh central generator for the given run seed."""
+    return np.random.default_rng(seed)
+
+
+# ---- _safe_eval -----------------------------------------------------------
+
+
+def test_safe_eval_helpers_available_with_rng():
+    value = _safe_eval("random()", StubAgent({}), [], rng=rng_for(1))
+    assert isinstance(value, float) and 0.0 <= value < 1.0
+
+
+def test_safe_eval_same_run_seed_same_draws():
+    expr = "[random(), normal(0, 1), binomial(10, 0.5), poisson(3)]"
+    first = _safe_eval(expr, StubAgent({}), [], rng=rng_for(7))
+    second = _safe_eval(expr, StubAgent({}), [], rng=rng_for(7))
+    assert first == second
+
+
+def test_safe_eval_without_rng_rejects_helpers():
+    with pytest.raises(ValueError):
+        _safe_eval("random()", StubAgent({}), [])
+
+
+def test_safe_eval_without_rng_rejects_seeded_helpers_too():
+    with pytest.raises(ValueError):
+        _safe_eval("random(seed=1)", StubAgent({}), [])
+
+
+def test_safe_eval_seeded_call_leaves_shared_stream_untouched():
+    plain, mixed = rng_for(3), rng_for(3)
+    expected = _safe_eval("random()", StubAgent({}), [], rng=plain)
+    _safe_eval("random(seed=99)", StubAgent({}), [], rng=mixed)
+    actual = _safe_eval("random()", StubAgent({}), [], rng=mixed)
+    assert actual == expected
+
+
+def test_safe_eval_comprehension_over_neighbours_is_run_deterministic():
+    """The same run seed selects the same neighbours from a comprehension."""
+    neighbours = [{"id": i, "infected": False} for i in range(100)]
+    expr = '[n["id"] for n in neighbours if random() < 0.3]'
+    first = _safe_eval(expr, StubAgent({}), neighbours, rng=rng_for(11))
+    second = _safe_eval(expr, StubAgent({}), neighbours, rng=rng_for(11))
+    assert first == second
+    assert 0 < len(first) < 100  # sanity: some, but not all, selected
+
+
+# ---- _evaluate_condition --------------------------------------------------
+
+
+def test_condition_with_rng_returns_real_bool():
+    agent = StubAgent({})
+    assert _evaluate_condition("random() < 1.0", agent, rng=rng_for(1)) is True
+    assert _evaluate_condition("random() < 0.0", agent, rng=rng_for(1)) is False
+
+
+def test_condition_without_rng_rejects_helpers():
+    with pytest.raises(ValueError):
+        _evaluate_condition("random() < 0.5", StubAgent({}))
+
+
+def test_condition_same_run_seed_same_outcomes():
+    agent = StubAgent({})
+
+    def outcomes(seed: int) -> list[bool]:
+        rng = rng_for(seed)
+        return [_evaluate_condition("random() < 0.5", agent, rng=rng) for _ in range(50)]
+
+    assert outcomes(5) == outcomes(5)
+    assert outcomes(5) != outcomes(6)
+
+
+# ---- evaluate_expression (legacy path) ------------------------------------
+
+
+def test_evaluate_expression_assigns_helper_value():
+    agent = StubAgent({"count": 0})
+    evaluate_expression('state["count"] = binomial(10, 1.0)', agent, [], rng=rng_for(1))
+    assert agent.state["count"] == 10
+
+
+def test_evaluate_expression_seeded_is_repeatable():
+    first, second = StubAgent({"x": 0.0}), StubAgent({"x": 0.0})
+    evaluate_expression('state["x"] = normal(0, 1, seed=4)', first, [], rng=rng_for(1))
+    evaluate_expression('state["x"] = normal(0, 1, seed=4)', second, [], rng=rng_for(2))
+    assert first.state["x"] == second.state["x"]
+
+# Rule-step tests: distribution helpers inside conditions and then/else blocks.
+
+def rng_for(seed: int) -> np.random.Generator:
+    """Return a fresh central generator for the given run seed."""
+    return np.random.default_rng(seed)
+
+
+def make_agent(agent_id: str = "a1", **state) -> "AgentState":
+    """Create an AgentState of type 'agent' with the given state."""
+    return AgentState(agent_id=agent_id, agent_type_name="agent", state=dict(state))
+
+
+def test_helper_in_condition_takes_then_branch():
+    agent = make_agent(alert=False)
+    steps = build_rule_steps(
+        [
+            {
+                "condition": "random() < 1.0",
+                "then": [{"field": "alert", "expression": "True"}],
+                "else": [],
+            }
+        ],
+        topology_names=[],
+    )
+    run_rule_steps(steps, agent, lambda *_a: [], rng=rng_for(1))
+    assert agent.get("alert") is True
+
+
+def test_helper_in_condition_takes_else_branch():
+    agent = make_agent(alert=True)
+    steps = build_rule_steps(
+        [
+            {
+                "condition": "random() < 0.0",
+                "then": [],
+                "else": [{"field": "alert", "expression": "False"}],
+            }
+        ],
+        topology_names=[],
+    )
+    run_rule_steps(steps, agent, lambda *_a: [], rng=rng_for(1))
+    assert agent.get("alert") is False
+
+
+def test_helper_in_then_expression():
+    agent = make_agent(flag=True, count=0)
+    steps = build_rule_steps(
+        [
+            {
+                "condition": 'state["flag"]',
+                "then": [{"field": "count", "expression": "binomial(10, 1.0)"}],
+                "else": [],
+            }
+        ],
+        topology_names=[],
+    )
+    run_rule_steps(steps, agent, lambda *_a: [], rng=rng_for(1))
+    assert agent.get("count") == 10
+
+
+def test_helper_in_condition_combined_with_neighbour_helper():
+    """The neighbour-aware condition path also forwards rng."""
+    agent = make_agent(alert=False)
+    neighbours = [
+        AgentState(agent_id="n1", agent_type_name="agent", state={"status": "I"}),
+        AgentState(agent_id="n2", agent_type_name="agent", state={"status": "S"}),
+    ]
+    steps = build_rule_steps(
+        [
+            {
+                "condition": (
+                    """neighbor_count('state["status"] == "I"') > 0 """
+                    "and random() < 1.0"
+                ),
+                "then": [{"field": "alert", "expression": "True"}],
+                "else": [],
+            }
+        ],
+        topology_names=[],
+    )
+    run_rule_steps(steps, agent, lambda *_a: neighbours, rng=rng_for(1))
+    assert agent.get("alert") is True
+
+
+def test_rule_without_rng_rejects_helpers():
+    agent = make_agent(alert=False)
+    steps = build_rule_steps(
+        [
+            {
+                "condition": "random() < 0.5",
+                "then": [{"field": "alert", "expression": "True"}],
+                "else": [],
+            }
+        ],
+        topology_names=[],
+    )
+    with pytest.raises(ValueError):
+        run_rule_steps(steps, agent, lambda *_a: [])
+
+
+def test_rule_steps_same_run_seed_same_outcomes():
+    """Unseeded helper draws across many agents repeat for the same run seed."""
+    steps = build_rule_steps(
+        [
+            {
+                "condition": "random() < 0.5",
+                "then": [{"field": "infected", "expression": "True"}],
+                "else": [],
+            }
+        ],
+        topology_names=[],
+    )
+
+    def run(seed: int) -> list[bool]:
+        rng = rng_for(seed)
+        agents = [make_agent(f"a{i}", infected=False) for i in range(50)]
+        for agent in agents:
+            run_rule_steps(steps, agent, lambda *_a: [], rng=rng)
+        return [a.get("infected") for a in agents]
+
+    assert run(5) == run(5)
+    assert run(5) != run(6)
+
+
+# Each variant exercises a different evaluation path inside run_step.
+BEHAVIOUR_VARIANTS = {
+    # plain step -> run_rule_steps -> evaluate_step -> _safe_eval
+    "plain_step": [
+        {"field": "age", "expression": "state['age'] + binomial(5, 0.5)"},
+    ],
+    # conditional -> run_rule_steps -> _evaluate_condition, then block
+    "conditional": [
+        {
+            "condition": "random() < 0.5",
+            "then": [{"field": "age", "expression": "state['age'] + 1"}],
+            "else": [],
+        },
+    ],
+    # legacy single-string path -> evaluate_expression
+    "legacy": [
+        {
+            "expression": 'state["age"] += binomial(5, 0.5)',
+            "topology_name": "contact",
+        },
+    ],
+}
+
+
+def final_ages(sim: "Simulation") -> list[Any]:
+    """Return every agent's final age in creation order (ids are random UUIDs)."""
+    return [agent.get("age") for agent in sim.live_population.values()]
+
+
+def run_config(
+        base_config: dict,
+        seed: int,
+        behaviours: list[dict],
+        n: int = 30,
+        steps: int = 5,
+) -> list[Any]:
+    """Build and run a simulation from base_config with the given run seed.
+
+    Args:
+        base_config: the conftest fixture (copied, never mutated).
+        seed: top-level run seed.
+        behaviours: behaviour entries for the "person" agent type.
+        n: number of agents.
+        steps: number of steps to run.
+
+    Returns:
+        Final ages of all agents.
+    """
+    config = copy.deepcopy(base_config)
+    config["seed"] = seed
+    config["agent_types"][0]["count"] = n
+    config["agent_types"][0]["attributes"][0]["distribution"] = {
+        "kind": "fixed",
+        "value": 18,
+    }
+    config["behaviours"] = {"person": behaviours}
+    config["stopping"]["max_steps"] = steps
+    sim = Simulation.from_config(config)
+    sim()
+    return final_ages(sim)
+
+
+@pytest.mark.parametrize("variant", BEHAVIOUR_VARIANTS)
+def test_unseeded_helpers_repeat_for_same_run_seed(base_config, variant):
+    behaviours = BEHAVIOUR_VARIANTS[variant]
+    assert run_config(base_config, 1, behaviours) == run_config(base_config, 1, behaviours)
+
+
+@pytest.mark.parametrize("variant", BEHAVIOUR_VARIANTS)
+def test_unseeded_helpers_change_with_run_seed(base_config, variant):
+    behaviours = BEHAVIOUR_VARIANTS[variant]
+    assert run_config(base_config, 1, behaviours) != run_config(base_config, 2, behaviours)
+
+
+def test_unseeded_helpers_draw_independently_per_agent(base_config):
+    ages = run_config(base_config, 1, BEHAVIOUR_VARIANTS["plain_step"])
+    assert len(set(ages)) > 1  # agents did not all receive the same draws
+
+
+def test_seeded_helper_ignores_run_seed_and_is_identical_per_agent(base_config):
+    behaviours = [
+        {"field": "age", "expression": "state['age'] + binomial(5, 0.5, seed=3)"},
+    ]
+    first = run_config(base_config, 1, behaviours)
+    second = run_config(base_config, 2, behaviours)
+    assert first == second  # independent of the top-level run seed
+    assert len(set(first)) == 1  # every agent drew the same seeded value
+
+
+def build_sim(
+        base_config: dict,
+        seed: int,
+        behaviours: list[dict],
+        n: int = 30,
+        steps: int = 5,
+        **config_overrides,
+) -> "Simulation":
+    """Build (but do not run) a simulation from base_config.
+
+    Ages start fixed at 18 for every agent, so differences between runs come
+    only from helper draws.
+
+    Args:
+        base_config: the conftest fixture (copied, never mutated).
+        seed: top-level run seed.
+        behaviours: behaviour entries for the "person" agent type.
+        n: number of agents.
+        steps: max_steps for the run.
+        **config_overrides: top-level config keys to replace, e.g.
+            ``sandbox={...}`` or ``stopping={...}``.
+
+    Returns:
+        The constructed Simulation.
+    """
+    config = copy.deepcopy(base_config)
+    config["seed"] = seed
+    config["agent_types"][0]["count"] = n
+    config["agent_types"][0]["attributes"][0]["distribution"] = {
+        "kind": "fixed",
+        "value": 18,
+    }
+    config["behaviours"] = {"person": behaviours}
+    config["stopping"]["max_steps"] = steps
+    config.update(config_overrides)
+    return Simulation.from_config(config)
+
+
+# Helpers inside comprehensions over the contact topology (all_pairs).
+COMPREHENSION_VARIANTS = {
+    "plain_step": [
+        {
+            "field": "age",
+            "expression": "state['age'] + len([n for n in neighbours if random() < 0.2])",
+        },
+    ],
+    "then_block": [
+        {
+            "condition": "state['age'] >= 0",
+            "then": [
+                {
+                    "field": "age",
+                    "expression": (
+                        "state['age'] + len([n for n in neighbours if random() < 0.2])"
+                    ),
+                },
+            ],
+            "else": [],
+        },
+    ],
+}
+
+
+def run_with_sandbox(base_config: dict, seed: int, behaviours: list[dict]) -> list:
+    """Run with a neighbour cap high enough for all_pairs over 30 agents."""
+    sim = build_sim(base_config, seed, behaviours, sandbox={"max_neighbours": 100})
+    sim()
+    return final_ages(sim)
+
+
+@pytest.mark.parametrize("variant", COMPREHENSION_VARIANTS)
+def test_helper_in_comprehension_repeats_for_same_run_seed(base_config, variant):
+    behaviours = COMPREHENSION_VARIANTS[variant]
+    first = run_with_sandbox(base_config, 1, behaviours)
+    second = run_with_sandbox(base_config, 1, behaviours)
+    assert first == second
+    assert any(age > 18 for age in first)  # the comprehension actually drew
+
+
+@pytest.mark.parametrize("variant", COMPREHENSION_VARIANTS)
+def test_helper_in_comprehension_changes_with_run_seed(base_config, variant):
+    behaviours = COMPREHENSION_VARIANTS[variant]
+    assert run_with_sandbox(base_config, 1, behaviours) != run_with_sandbox(
+        base_config, 2, behaviours
+    )
+
+
+# ---- error paths ----------------------------------------------------------
+
+
+def test_unknown_helper_is_rejected_in_a_run(base_config):
+    """The helper set is closed: exponential is not available until registered."""
+    sim = build_sim(
+        base_config, 1, [{"field": "age", "expression": "state['age'] + exponential(1.0)"}]
+    )
+    with pytest.raises(ValueError, match="exponential"):
+        sim()
+
+
+def test_invalid_helper_arguments_surface_as_value_error(base_config):
+    sim = build_sim(
+        base_config, 1, [{"field": "age", "expression": "state['age'] + binomial(5, 2)"}]
+    )
+    with pytest.raises(ValueError, match="binomial"):
+        sim()
+
+
+# ---- stopping conditions --------------------------------------------------
+
+
+def test_stopping_condition_does_not_get_distribution_helpers(base_config):
+    """Stopping conditions use their own evaluator and are given no rng.
+
+    A condition calling random() cannot evaluate, so check_stopping records
+    the failure as a stop with reason 'error' at the end of the first step.
+    """
+    sim = build_sim(
+        base_config,
+        1,
+        [{"field": "age", "expression": "state['age'] + 1"}],
+        stopping={"max_steps": 5, "conditions": ["random() < 0.5"], "combinator": "OR"},
+    )
+    result = sim()
+
+    assert result.stopped is True
+    assert result.reason == "error"
+    assert "random" in result.detail

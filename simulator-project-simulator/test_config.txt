@@ -1,0 +1,78 @@
+{
+	    "N": 3, 
+	    "T": 10, 
+	    "seed": 1,
+	    "agent_types": [
+	        {
+	            "name": "agent",
+	            "count": n,
+	            "generation_mode": "heterogeneous",
+	            "attributes": [
+	                {
+	                    "name": "age",
+	                    "type": "int",
+	                    "population_method": "distribution",
+	                    "distribution": {"kind": "fixed", "value": 18}
+	                },
+	                {
+	                    "name": "energy",
+	                    "type": "float",
+	                    "population_method": "distribution",
+	                    "distribution": {"kind": "normal", "mean": 50.0, "stddev": 12.0}
+	                },
+	                {
+	                    "name": "gender",
+	                    "type": "categorical",
+	                    "population_method": "distribution",
+	                    "distribution": {
+	                        "kind": "categorical",
+	                        "weights": {"male": 0.25, "female": 0.75}
+	                    },
+	                },
+	                {
+	                    "name": "region",
+	                    "type": "categorical",
+	                    "population_method": "distribution",
+	                    "distribution": {
+	                        "kind": "categorical",
+	                        "weights": {"north": 0.25, "south": 0.25, "east": 0.25, "west": 0.25}
+	                    },
+	                },
+	            ],
+	        }
+	    ],
+	    "topologies": {"contact": {"mode": "all_pairs", "agent_types": ["agent"]}},
+	    "behaviours": {
+	        "agent": [{"field": "age", "expression": "state['age'] + 1"},
+	                  {
+	                      "condition": "state['energy'] >= 50",
+	                      "then": [
+	                          {"field": "energy",
+	                           "expression": "state['energy'] + 0.1 * len([n for n in neighbours if n['region'] == state['region']])"}
+	                      ],
+	                      "else": [
+	                          {
+	                              "field": "energy",
+	                              "expression": (
+	                                  "state['energy'] + 0.1 * max(0, "
+	                                  "sum(n['energy'] for n in neighbours) / len(neighbours)"
+	                                  " - state['energy']) if len(neighbours) > 0 "
+	                                  "else state['energy']"
+	                              ),
+	                              "topology_name": "contact",  
+	                          },
+	                      ],
+	                  },
+	                  {
+	                      "condition": "state['gender'] == 'male'",
+	                      "then": [
+	                          {
+	                              "field": "energy", "expression": "state['energy'] - 1.5"
+	                          }
+	                      ]
+	                  },
+	                  ]
+	    },
+	    "scheduler": {"order": "all_at_once", "read_mode": "frozen"},
+	    "stopping": {"max_steps": t, "conditions": [], "combinator": "OR"}
+	}

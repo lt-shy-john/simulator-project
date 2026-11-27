@@ -2,6 +2,9 @@ import sys
 import inspect
 import logging
 
+import ast
+from typing import Any, Mapping
+from pathlib import Path
 from pydantic import ValidationError
 
 import util.util as util
@@ -41,10 +44,10 @@ def do_help():
 def do_run():
 	"""Run the simulation using the config built by 'setting'."""
 
-	if 'config' not in settings:
+	if len(settings) <= 1:
 		logger.warning("No simulation configured yet — run 'setting' first.")
 		return
-	current_run = Simulation.from_config(settings['config'])
+	current_run = Simulation.from_config(settings)
 	current_run()
 
 
@@ -442,3 +445,165 @@ def set_N():
 def set_T():
 	logger.info('Please enter simulation time (steps): ')
 	settings['T'] = util.prompt_int()
+
+
+def _parse_value(raw: str) -> Any:
+    """Convert a raw string from the config file into a Python value.
+
+    Tries booleans/None first, then falls back to ``ast.literal_eval`` so
+    ints, floats, lists, tuples, dicts, and quoted strings are handled.
+    If nothing matches, the original string is returned unchanged.
+
+    Args:
+        raw: The unparsed value text, e.g. ``"42"``, ``"true"``, ``"[1, 2]"``.
+
+    Returns:
+        The value converted to the most appropriate Python type.
+    """
+    value = raw.strip()
+    lowered = value.lower()
+
+    if lowered in {"true"}:
+        return True
+    if lowered in {"false"}:
+        return False
+    if lowered in {"none", "null"}:
+        return None
+
+    try:
+        return ast.literal_eval(value)
+    except (ValueError, SyntaxError):
+        return value
+
+
+def _file_variables(tree: ast.Expression) -> dict[str, Any]:
+	"""Collect the literal top-level ``"N"`` and ``"T"`` entries of a dict.
+
+	Args:
+		tree: The parsed expression tree of the config file.
+
+	Returns:
+		A mapping such as ``{"n": 3, "t": 10}`` (lowercase keys).
+	"""
+	found: dict[str, Any] = {}
+	if isinstance(tree.body, ast.Dict):
+		for key, value in zip(tree.body.keys, tree.body.values):
+			if (
+				isinstance(key, ast.Constant)
+				and key.value in ('N', 'T')
+				and isinstance(value, ast.Constant)
+			):
+				found[key.value.lower()] = value.value
+	return found
+
+
+class _SubstituteNames(ast.NodeTransformer):
+	"""Replace bare variable names in a parsed literal with constant values."""
+
+	def __init__(self, variables: Mapping[str, Any]) -> None:
+		"""Store the name-to-value mapping used for substitution.
+
+		Args:
+			variables: Names allowed in the file (e.g. ``{"n": 100}``).
+		"""
+		self.variables = variables
+
+	def visit_Name(self, node: ast.Name) -> ast.AST:
+		"""Swap a known name for its value, or reject an unknown one.
+
+		Args:
+			node: The ``Name`` node being visited.
+
+		Returns:
+			A ``Constant`` node holding the substituted value.
+
+		Raises:
+			ValueError: If the name is not in ``variables``.
+		"""
+		if node.id not in self.variables:
+			raise ValueError(f'Line {node.lineno}: unknown name {node.id!r}')
+		return ast.copy_location(ast.Constant(self.variables[node.id]), node)
+
+
+def load_config(path: str | Path, variables: Mapping[str, Any] | None = None) -> dict[str, Any]:
+	"""Load a config file, as either a Python dict literal or ``key = value`` lines.
+
+	For a dict literal, the names ``n`` and ``t`` are replaced by the file's
+	own ``"N"`` and ``"T"`` values, unless ``variables`` supplies a non-None
+	override (e.g. from the command line).
+
+	Args:
+		path: Path to the config file.
+		variables: Overrides for names used in the file, e.g. ``{"n": 100}``.
+			Entries whose value is ``None`` are ignored.
+
+	Returns:
+		The parsed configuration dictionary.
+
+	Raises:
+		ValueError: If the file uses a name that has no value.
+	"""
+	text = Path(path).read_text(encoding='utf-8').strip()
+
+	if text.startswith('{'):
+		tree = ast.parse(text, mode='eval')
+		overrides = {k: v for k, v in (variables or {}).items() if v is not None}
+		merged = {**_file_variables(tree), **overrides}
+		tree = _SubstituteNames(merged).visit(tree)
+		ast.fix_missing_locations(tree)
+		return ast.literal_eval(tree)
+
+	return express_mode(path)  # the earlier line-based parser, renamed
+
+
+def express_mode(filepath):
+	"""Read a text file and convert it into a configuration dictionary.
+
+	    Supported syntax:
+	        * ``key = value`` or ``key: value`` pairs
+	        * ``[section]`` headers, which create nested dictionaries
+	        * Full-line comments starting with ``#`` or ``;``
+	        * Inline comments after `` #`` (a space then ``#``)
+	        * Blank lines (ignored)
+
+	    Args:
+	        path: Path to the text configuration file.
+
+	    Returns:
+	        A dictionary of settings. Keys under a ``[section]`` header are
+	        stored in a nested dict named after that section.
+
+	    Raises:
+	        FileNotFoundError: If ``path`` does not exist.
+	        ValueError: If a non-empty line is not a valid pair or section header.
+	    """
+	config: dict[str, Any] = {}
+	current: dict[str, Any] = config
+
+	with open(filepath, "r", encoding="utf-8") as file:
+		for line_number, line in enumerate(file, start=1):
+			line = line.strip()
+
+			if not line or line.startswith(("#", ";")):
+				continue
+
+			# Section header, e.g. [database]
+			if line.startswith("[") and line.endswith("]"):
+				section = line[1:-1].strip()
+				current = config.setdefault(section, {})
+				continue
+
+			# Split on the first '=' or ':' that appears
+			separators = [i for i in (line.find("="), line.find(":")) if i != -1]
+			if not separators:
+				raise ValueError(f"Line {line_number}: invalid syntax: {line!r}")
+
+			idx = min(separators)
+			key, raw_value = line[:idx].strip(), line[idx + 1:]
+
+			# Strip inline comments
+			raw_value = raw_value.split(" #", 1)[0]
+
+			current[key] = _parse_value(raw_value)
+
+	return config

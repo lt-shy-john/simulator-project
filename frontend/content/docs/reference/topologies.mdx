@@ -1,0 +1,179 @@
+---
+title: Topologies
+description: Reference for the interaction topologies that decide which agents are neighbours.
+---
+
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+
+A **topology** determines which agents count as the neighbours of an agent. Rules,
+neighbour helpers and behaviour modules all read neighbours through a topology.
+
+The simulation configuration holds topologies under `topologies`, as a mapping from a
+name to the settings of that topology. The mapping must not be empty. The name is the
+value used as `topology_name` in rule steps and conditions.
+
+```json
+"topologies": {
+  "contact": { "mode": "all_pairs", "agent_types": null },
+  "household": { "mode": "random_sample", "k": 4, "seed": 42 }
+}
+```
+
+## Common settings
+
+**Parameters**
+
+- **`mode`** : *one of `"all_pairs"`, `"random_sample"`, `"network"`*. The kind of
+  topology.
+- **`agent_types`** : *list of text, or null, optional*. Restricts the neighbours to
+  agents of the listed types. If null or omitted, all types are eligible.
+
+### Behaviour shared by all topologies
+
+| Property | Behaviour |
+|---|---|
+| Self-interaction | An agent is not included in its own neighbour list by default. `all_pairs` can include it with `allow_self_interaction`. |
+| Cross-type interaction | Neighbours of any agent type are included unless `agent_types` restricts them. |
+
+
+---
+
+## `all_pairs`
+
+Every other agent in the eligible population is a neighbour. With N agents, each agent
+has N - 1 neighbours. The neighbour sets are directed.
+
+```json
+"contact": { "mode": "all_pairs", "agent_types": ["predator", "prey"] }
+```
+
+**Parameters**
+
+- **`allow_self_interaction`** : *boolean, optional*. If `true`, an agent is included in
+  its own neighbour list. Defaults to `false`.
+
+The [common settings](#common-settings) also apply.
+
+```json
+"contact": { "mode": "all_pairs", "allow_self_interaction": true }
+```
+
+<Callout title="Cost" type="info">
+The total number of neighbour pairs grows with the square of the population. Reducing
+this for symmetric interactions is planned, but not yet available.
+</Callout>
+
+---
+
+## `random_sample`
+
+Each agent receives a random subset of the eligible population as neighbours.
+
+```json
+"disease_spread": { "mode": "random_sample", "k": 5, "seed": 42 }
+```
+
+```json
+"social_influence": {
+  "mode": "random_sample",
+  "proportion": 0.1,
+  "seed": 123,
+  "agent_types": ["person"]
+}
+```
+
+**Parameters**
+
+- **`k`** : *integer*. Fixed mode. Each agent receives `k` neighbours. If `k`
+  exceeds the size of the eligible pool, the sample size is capped at the size of the
+  pool and no error is raised.
+- **`proportion`** : *number*. Proportional mode. Each agent receives this
+  fraction of the eligible population as neighbours. A value of `0.1` selects 10%.
+- **`seed`** : *integer, optional*. A seed local to this topology, for reproducible
+  sampling.
+
+Sampling is performed with replacement, so the same agent can appear more than once in a
+neighbour list, and a capped sample does not necessarily contain every eligible agent.
+An agent is never sampled as its own neighbour. If the eligible pool is empty, the
+neighbour list is empty.
+
+<Callout title="Self-interaction" type="info">
+`random_sample` has no `allow_self_interaction` setting. An agent is never sampled as its
+own neighbour.
+</Callout>
+
+Exactly one of `k` and `proportion` must be given. Giving both, or neither, is rejected:
+`random_sample topology requires exactly one of 'k' or 'proportion', not both or neither.`
+
+<Callout title="To confirm" type="warn">
+Confirm how a global seed interacts with the topology `seed`.
+</Callout>
+
+---
+
+## `network`
+
+Neighbours are the nodes adjacent to an agent in a graph. The graph is built once at the
+start of the simulation and kept for the whole run. Node identifiers are the agent
+identifiers, so each agent is looked up directly in the graph.
+
+The graph is undirected. Directed graphs are not supported.
+
+A graph can be generated:
+
+```json
+"contact": {
+  "mode": "network",
+  "graph": { "type": "erdos_renyi", "n": 1000, "p": 0.05, "seed": 42 }
+}
+```
+
+or supplied from a file:
+
+```json
+"contact": {
+  "mode": "network",
+  "graph": { "source": "path/to/my_graph.graphml" }
+}
+```
+
+**Parameters**
+
+- **`graph.type`** : *one of `"erdos_renyi"`, `"barabasi_albert"`, `"watts_strogatz"`*.
+  The kind of generated graph. See [Generated graph types](#generated-graph-types).
+- **`graph.seed`** : *integer, optional*. The seed used to generate the graph.
+- **`graph.source`** : *text*. The path of a graph file to load instead of generating
+  one. A configuration gives either a generated graph or a source.
+
+### Generated graph types
+
+| `graph.type` | Graph | Parameters |
+|---|---|---|
+| `erdos_renyi` | A random graph | `n`, the number of nodes. `p`, the probability of an edge between two nodes. |
+| `barabasi_albert` | A scale-free graph | `n`, the number of nodes. `m`, the number of edges added with each new node. |
+| `watts_strogatz` | A small-world graph | `n`, the number of nodes. `k`, the number of nearest neighbours each node is joined to. `p`, the probability of rewiring an edge. |
+
+An agent is not its own neighbour unless a self-loop was added to the graph explicitly.
+`network` has no `allow_self_interaction` setting. An agent that has no edges, or that
+is not in the graph, has an empty neighbour list.
+
+<Callout title="Exported configurations" type="info">
+When a configuration is exported with `to_config()`, a file path in `graph.source` is
+replaced by the graph data itself, so the exported configuration is self-contained.
+</Callout>
+
+<Callout title="To confirm" type="warn">
+Confirm the parameter names of `barabasi_albert` and `watts_strogatz`, which are taken
+from the description in `graph_build.py`, the accepted file formats for `source`, and how
+graph nodes are matched to agents when the graph is generated.
+</Callout>
+
+---
+
+## Using a topology in rules
+
+When two or more topologies are configured, every rule step or condition that uses a
+neighbour helper or `neighbours` must name its topology with `topology_name`. See
+[Behaviour Expressions](/docs/behaviour-expression#choosing-a-topology).

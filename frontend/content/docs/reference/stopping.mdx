@@ -1,0 +1,130 @@
+---
+title: Stopping Conditions
+description: Reference for the settings that end a simulation run.
+---
+
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+For an introduction with worked examples, see the [guide](/docs/stopping-conditions).
+ 
+A simulation ends when it reaches a maximum number of steps, or earlier when a stopping
+condition becomes true. Stopping conditions are checked against the whole model at the
+end of each step, after that step has completed. They are never checked in the middle of
+a step.
+ 
+```json
+"stopping": {
+  "max_steps": 500,
+  "conditions": [
+    "model.count(\"state['status'] == 'I'\") == 0",
+    "model.mean(\"energy\") < 1"
+  ],
+  "combinator": "OR"
+}
+```
+ 
+**Parameters**
+ 
+- **`max_steps`** : *integer*. The maximum number of steps. This setting is required, and
+  the simulation always ends at or before this step.
+- **`conditions`** : *list of text, optional*. Condition expressions. Defaults to an
+  empty list, in which case only `max_steps` ends the run.
+- **`combinator`** : *`"AND"` or `"OR"`, optional*. How the conditions are combined.
+  With `"OR"`, the run ends when any condition is true. With `"AND"`, it ends when all
+  conditions are true. Defaults to `"OR"`.
+<Callout title="To confirm" type="warn">
+Confirm the key names (`stopping`, `max_steps`, `conditions`, `combinator`).
+</Callout>
+---
+ 
+## Stop reasons
+ 
+When a run ends, the reason is recorded in the run metadata as one of three literal
+strings.
+ 
+| Reason | Meaning |
+|---|---|
+| `max_steps` | The run reached `max_steps`. |
+| `condition_met` | The conditions were satisfied, as decided by `combinator`. |
+| `error` | A condition could not be evaluated. |
+ 
+The run result also carries an optional `detail` text that describes the stop.
+ 
+---
+ 
+## Writing a condition
+ 
+A condition is an expression that evaluates to `True` or `False`. It reads the model
+through the name `model`, which offers three aggregate queries.
+ 
+```
+model.count("state['status'] == 'I'") == 0
+```
+ 
+### `model.count`
+ 
+```
+model.count(filter_expr=None)
+```
+ 
+Returns the number of agents that match the filter.
+ 
+**Parameters**
+ 
+- **`filter_expr`** : *text, optional*. A boolean expression evaluated against each
+  agent, written in the form of a condition that reads attributes with `state[...]`
+  (`"state['status'] == 'I'"`). If omitted, all agents are counted.
+**Returns** : *integer*.
+ 
+### `model.mean`
+ 
+```
+model.mean(attr, filter_expr=None)
+```
+ 
+Returns the mean of an attribute over the agents that match the filter.
+ 
+**Parameters**
+ 
+- **`attr`** : *text*. The name of the attribute.
+- **`filter_expr`** : *text, optional*. As for `model.count`.
+**Returns** : *number*.
+ 
+**Raises** : `ValueError` if there are no values to average.
+ 
+### `model.sum`
+ 
+```
+model.sum(attr, filter_expr=None)
+```
+ 
+Returns the sum of an attribute over the agents that match the filter.
+ 
+**Parameters**
+ 
+- **`attr`** : *text*. The name of the attribute.
+- **`filter_expr`** : *text, optional*. As for `model.count`.
+**Returns** : *number*.
+ 
+### Limits
+ 
+Only `count`, `mean` and `sum` can be reached through `model`. A condition cannot read
+or change individual agents, log events, or create or remove agents.
+ 
+A condition uses the same sandbox as behaviour expressions, so it supports the same
+operators, conditional expressions and built-in functions (see
+[the reference](/docs/behaviour-expression-reference#built-in-functions)). It does not
+have `state` or `neighbours`, and it cannot call the neighbour helpers or the random
+helpers.
+ 
+---
+ 
+## Errors
+ 
+A condition that is malformed, uses an undefined name or a disallowed operation, or does
+not evaluate to `True` or `False`, raises a `ValueError`. The run does not propagate the
+exception. It ends with the stop reason `error`.
+ 
+This also applies to a condition that calls a neighbour helper or a random helper. Such
+a condition ends the run at the end of the first step with the stop reason `error`.

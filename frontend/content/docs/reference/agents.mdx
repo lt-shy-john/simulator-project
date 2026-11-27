@@ -1,0 +1,225 @@
+---
+title: Creating Agents
+description: Reference for agent types, attributes and attribute distributions.
+---
+
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+
+An **agent type** defines one kind of agent in the simulation: its name, the number of
+agents created at the start, and the attributes each agent carries. The simulation
+configuration holds a list of agent types under `agent_types`.
+
+## Agent types
+
+```json
+"agent_types": [
+  {
+    "name": "person",
+    "count": 1000,
+    "generation_mode": "heterogeneous",
+    "attributes": [
+      {
+        "name": "age",
+        "type": "int",
+        "population_method": "distribution",
+        "distribution": { "kind": "uniform", "low": 18, "high": 80 }
+      },
+      {
+        "name": "status",
+        "type": "categorical",
+        "population_method": "distribution",
+        "distribution": { "kind": "categorical", "weights": { "S": 0.99, "I": 0.01 } }
+      }
+    ]
+  }
+]
+```
+
+**Parameters**
+
+- **`name`** : *text*. The name of the agent type. Topologies, schedulers and rules
+  refer to the type by this name.
+- **`count`** : *integer, greater than 0*. The number of agents of this type created at
+  the start of the simulation.
+- **`generation_mode`** : *`"homogeneous"` or `"heterogeneous"`*. How the attribute
+  values of the agents are generated.
+- **`attributes`** : *list of attribute definitions, optional*. Defaults to an empty
+  list. See [Attributes](#attributes).
+- **`bulk_upload_template_path`** : *text, optional*. Records the template file used for
+  a bulk import. It applies only when `generation_mode` is `"heterogeneous"` and at
+  least one attribute uses the `"bulk_upload"` population method.
+
+**Raises**
+
+- `ValueError` if `count` is not greater than 0:
+  `agent type 'person': count must be > 0, got 0`.
+- `ValueError` if two attributes of the same agent type share a name.
+
+### Population status
+
+Each agent type has a derived status that the configuration wizard uses for its menu
+tags. The status is calculated from the current attribute data and is never stored in
+the configuration.
+
+| Status | Meaning |
+|---|---|
+| `not_configured` | The agent type has not been set up. |
+| `schema_only` | Heterogeneous: the attributes are defined, but their values are not. |
+| `pending_import` | Heterogeneous with bulk upload: the template is written, but the file is not loaded. |
+| `complete` | The agent type is fully configured. |
+
+---
+
+## Attributes
+
+An attribute is a named value that every agent of the type carries. Rules and
+behaviour modules read and write attributes through the agent's `state`.
+
+```json
+{
+  "name": "energy",
+  "type": "float",
+  "population_method": "distribution",
+  "distribution": { "kind": "normal", "mean": 100, "stddev": 10 }
+}
+```
+
+**Parameters**
+
+- **`name`** : *text*. The attribute name. Names must be unique within an agent type.
+  Rules can only write to attributes defined here.
+- **`type`** : *one of `"int"`, `"float"`, `"bool"`, `"categorical"`*. The type of the
+  values.
+- **`population_method`** : *one of `"distribution"`, `"manual"`, `"bulk_upload"`, or
+  null, optional*. How the values are filled in. Null means that the attribute is
+  defined but not yet populated.
+- **`distribution`** : *distribution specification, or null, optional*. Used when the
+  population method is `"distribution"`. See [Distributions](#distributions).
+
+### Population methods
+
+| Method | Description |
+|---|---|
+| `distribution` | Each value is drawn from the attribute's `distribution`. |
+| `manual` | Values are entered individually. |
+| `bulk_upload` | Population is deferred to an external file, imported through a template. |
+
+<Callout title="To confirm" type="warn">
+This page does not yet describe how `manual` values are stored, or how
+`"homogeneous"` mode uses the attribute definitions.
+</Callout>
+
+---
+
+## Distributions
+
+A distribution describes how values are drawn when an attribute is populated. Every
+specification has a `kind` field that selects the distribution. A specification with an
+unknown `kind`, or with parameters outside the permitted range, is rejected when the
+configuration is validated.
+
+### fixed
+
+```json
+{ "kind": "fixed", "value": 0 }
+```
+
+Every agent receives the same value.
+
+**Parameters**
+
+- **`value`** : *number, boolean or text*. The value assigned to every agent.
+
+### uniform
+
+```json
+{ "kind": "uniform", "low": 18, "high": 80 }
+```
+
+**Parameters**
+
+- **`low`** : *number*. The lower bound.
+- **`high`** : *number*. The upper bound. It must be greater than or equal to `low`.
+
+**Raises** : `ValueError` if `low` is greater than `high`.
+
+### normal
+
+```json
+{ "kind": "normal", "mean": 100, "stddev": 10 }
+```
+
+**Parameters**
+
+- **`mean`** : *number*. The mean of the distribution.
+- **`stddev`** : *number, at least 0*. The standard deviation.
+
+**Raises** : `ValueError` if `stddev` is negative.
+
+### binomial
+
+```json
+{ "kind": "binomial", "n": 10, "prob": 0.2 }
+```
+
+**Parameters**
+
+- **`n`** : *integer*. The number of trials.
+- **`prob`** : *number from 0 to 1*. The probability of success in each trial.
+
+**Raises** : `ValueError` if `prob` is outside the range from 0 to 1.
+
+### poisson
+
+```json
+{ "kind": "poisson", "prob": 0.5, "exp_num_event": 3 }
+```
+
+**Parameters**
+
+- **`prob`** : *number from 0 to 1*. The rate parameter of the distribution.
+- **`exp_num_event`** : *integer*. The number of events.
+
+**Raises** : `ValueError` if `prob` is outside the range from 0 to 1.
+
+<Callout title="To confirm" type="warn">
+`prob` is documented as the rate parameter (lambda) of the distribution and is limited
+to the range from 0 to 1, as the validator requires. Confirm that this range is
+intended, because the rate of a Poisson distribution is not normally bounded by 1, and
+check how `exp_num_event` is used when a value is drawn.
+</Callout>
+
+### categorical
+
+```json
+{ "kind": "categorical", "weights": { "S": 0.99, "I": 0.01 } }
+```
+
+**Parameters**
+
+- **`weights`** : *mapping from text to number*. The relative weight of each category.
+  The mapping must not be empty and every weight must be at least 0.
+
+**Raises** : `ValueError` if `weights` is empty or contains a negative weight.
+
+---
+
+## Initial population from a file
+
+Rows from a CSV file can override the generated values for an agent type. They are
+supplied in `initial_population`, keyed by agent type name, and take precedence over
+generated agents up to the `count` of that type.
+
+| Case | Behaviour |
+|---|---|
+| More rows than `count` | A warning is logged and the first `count` rows are used, in order. |
+| Fewer rows than `count` | A warning is logged and the remaining agents are generated from their distributions. |
+| A column that matches no attribute | The column is ignored, with a warning. |
+
+<Callout title="To confirm" type="warn">
+The import helper (`import_csv(csv_path, agent_type)`) is called before
+`Simulation.from_config` and its output is merged into the configuration. The wording
+of this section needs checking against the current code.
+</Callout>

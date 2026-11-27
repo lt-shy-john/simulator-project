@@ -3,4 +3,115 @@ title: Stopping Condition
 description: Specify when to stop your simulation.
 ---
 
-By default, you will set how many steps for the simulation. This system is able to stop prematurely to optimise your simulation. 
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+## The idea
+ 
+A village story has to end somewhere. Maybe it ends after a year. Maybe it ends sooner,
+when the illness has finally died out, or when everyone has run out of food.
+ 
+**Stopping conditions** are how you say so. There is always a hard limit, and you can
+add **early exits** that end the run as soon as something you care about happens.
+ 
+<Callout title="In short" type="info">
+- `max_steps` is required. It is the hard limit, so the run can never go on forever.
+- `conditions` are optional early exits.
+- `combinator` decides whether one condition or all of them are needed.
+</Callout>
+## The hard limit
+ 
+```json
+"stopping": { "max_steps": 500 }
+```
+ 
+*"Stop after 500 steps, no matter what."* With nothing else set, this is the only thing
+that ends the run.
+ 
+## Early exits
+ 
+A condition is a question about the whole village, asked at the **end of each step**.
+When the answer is yes, the run stops.
+ 
+```json
+"stopping": {
+  "max_steps": 500,
+  "conditions": ["model.count(\"state['status'] == 'I'\") == 0"]
+}
+```
+ 
+*"Stop after 500 steps, or sooner if nobody is infected any more."*
+ 
+Conditions use `model`, which can answer three kinds of question:
+ 
+| Question | Written as |
+|---|---|
+| How many agents are like this? | `model.count(...)` |
+| What is the average of an attribute? | `model.mean('energy')` |
+| What is the total of an attribute? | `model.sum('energy')` |
+ 
+Each can take an optional filter to look at some agents only.
+ 
+<Callout title="Writing the filter" type="info">
+The filter is written like a condition about **one** agent, and reads attributes with
+`state[...]`, exactly like the filters of the neighbour helpers. Write
+`"state['status'] == 'I'"`. A bare `status==I` is not understood. Use two different
+kinds of quote marks, because the filter sits inside another piece of text.
+</Callout>
+<Callout title="Averages need someone to average" type="warn">
+`model.mean` has an error when there are no values to average. If the group could be
+empty, check with `model.count` first.
+</Callout>
+## One condition, or all of them?
+ 
+With several conditions, `combinator` says how they fit together.
+ 
+<Cards>
+  <Card title="OR (the default)">
+    Stop when **any** condition is true. *"Stop if the illness is gone, or if the food
+    has run out."*
+  </Card>
+  <Card title="AND">
+    Stop only when **all** conditions are true. *"Stop once the illness is gone and
+    everyone has recovered."*
+  </Card>
+</Cards>
+```json
+"stopping": {
+  "max_steps": 500,
+  "conditions": [
+    "model.count(\"state['status'] == 'I'\") == 0",
+    "model.mean('energy') < 1"
+  ],
+  "combinator": "AND"
+}
+```
+ 
+## Why did it stop?
+ 
+Every run records the reason it ended:
+ 
+| Reason | What happened |
+|---|---|
+| `max_steps` | The run reached its hard limit. |
+| `condition_met` | Your conditions were satisfied. |
+| `error` | A condition could not be worked out. |
+ 
+## When a condition can't be worked out
+ 
+If a condition is mistyped, uses a name that doesn't exist, or doesn't come out as yes or
+no, the run **ends with the reason `error`**, instead of crashing.
+ 
+The same happens if a condition uses a neighbour helper or a random helper. These belong
+in agent rules, and aren't available here. Conditions look at the whole village, so they
+don't have `state` or `neighbours` either.
+ 
+<Callout title="Check the first step" type="info">
+Stopping conditions are only checked when a step ends. A broken condition will therefore
+stop your run at the end of the **first step**. If a run ends immediately with `error`,
+look at your conditions first.
+</Callout>
+## What next
+ 
+- Every setting in detail: [Stopping Conditions Reference](/docs/stopping-conditions-reference).
+- Back to the overview: [Behaviour Expressions](/docs/behaviour-expression).

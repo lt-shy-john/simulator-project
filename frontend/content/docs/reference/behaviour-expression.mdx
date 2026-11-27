@@ -1,0 +1,366 @@
+---
+title: Behaviour Expressions
+description: Reference for the functions, names, syntax and settings available in behaviour expressions.
+---
+
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+
+Expressions are evaluated in a sandbox that provides a closed set of names and
+functions. Names and functions not listed on this page are unavailable.
+
+## Supported syntax
+
+Expressions are a restricted subset of Python. An expression evaluates to a value and
+cannot contain statements.
+
+### Permitted constructs
+
+| Construct | Example |
+|---|---|
+| Arithmetic | `state['age'] + 1`, `0.1 * x`, `0.9 ** k` |
+| Comparison | `state['energy'] < 50` |
+| Boolean operators `and`, `or`, `not` | `random() < 0.05 and state['age'] > 18` |
+| Conditional expression | `'R' if state['days'] > 10 else 'I'` |
+| Subscript by key | `state['age']`, `n['status']` |
+| List, set and generator comprehensions | `[n['status'] for n in neighbours]` |
+| Calls to the functions on this page | `max(...)`, `neighbor_count(...)` |
+
+### Unsupported constructs
+
+| Construct | Alternative |
+|---|---|
+| Statements such as `state['age'] += 1` | An expression for the new value: `state['age'] + 1` |
+| A bare attribute name such as `age` | `state['age']` |
+| Indexing to reach a second hop, such as `neighbours[0]['neighbours']` | A comprehension: `[m for n in neighbours for m in n['neighbours']]` |
+| Functions not listed on this page, such as `sorted`, `range` or `int` | None. These functions are unavailable. |
+
+<Callout title="Boolean results" type="info">
+A `condition`, and the `filter_expr` argument of a neighbour helper, must evaluate to
+`True` or `False`. Any other result raises an error.
+</Callout>
+
+## Available names
+
+| Name | Description | Context |
+|---|---|---|
+| `state` | A dictionary of the current agent's attributes, read as `state['name']`. | Rule steps and conditions |
+| `neighbours` (or `neighbors`) | A list containing one dictionary of attributes for each neighbour. | Rule steps and conditions |
+| `n['neighbours']` | The neighbours of neighbour `n` (one hop beyond). Constructed only when read. | Inside a comprehension |
+| `model` | The model, providing `model.count`, `model.mean` and `model.sum`. | Stopping conditions only |
+
+When the schedule's `read_mode` is `"frozen"`, `neighbours` reflects the state of each
+neighbour at the start of the step.
+
+---
+
+## Neighbour helpers
+
+A neighbour helper evaluates a query over the neighbours of the current agent. Helpers
+are available in rule steps and conditions, and may be called inside a comprehension.
+A helper always refers to the neighbours of the current agent, and never to the loop
+variable of a comprehension.
+
+<Callout title="Availability" type="info">
+Neighbour helpers are not available in legacy top-level expression strings, in module
+entries or in stopping conditions. The `filter_expr` argument cannot call a helper.
+</Callout>
+
+### `neighbor_count`
+
+```
+neighbor_count(filter_expr=None)
+```
+
+Returns the number of neighbours that satisfy the filter.
+
+**Parameters**
+
+- **`filter_expr`** : *text, optional*. A boolean expression evaluated against the state
+  of each neighbour, written in the form of a condition
+  (`"state['status'] == 'I'"`). If omitted, all neighbours are counted.
+
+**Returns** : *integer*. The result is `0` when no neighbour satisfies the filter.
+
+**Raises** : `ValueError` if the filter refers to an undefined name, uses a disallowed
+operation, or does not evaluate to `True` or `False`.
+
+```
+neighbor_count("state['status'] == 'I'") >= 2
+```
+
+### `neighbor_mean`
+
+```
+neighbor_mean(attr, filter_expr=None)
+```
+
+Returns the mean of an attribute over the neighbours that satisfy the filter.
+
+**Parameters**
+
+- **`attr`** : *text*. The name of the attribute, for example `'energy'`.
+- **`filter_expr`** : *text, optional*. As for `neighbor_count`.
+
+**Returns** : *number*. The result is `0.0` when no neighbour satisfies the filter,
+including when the agent has no neighbours.
+
+<Callout title="Difference from model.mean()" type="warn">
+In stopping conditions, `model.mean()` raises a `ValueError` when there are no values
+to average. `neighbor_mean` returns `0.0` in that case.
+</Callout>
+
+```
+neighbor_mean('energy')
+```
+
+### `neighbor_sum`
+
+```
+neighbor_sum(attr, filter_expr=None)
+```
+
+Returns the sum of an attribute over the neighbours that satisfy the filter.
+
+**Parameters**
+
+- **`attr`** : *text*. The name of the attribute to sum.
+- **`filter_expr`** : *text, optional*. As for `neighbor_count`.
+
+**Returns** : *number*. The result is `0` when no neighbour satisfies the filter.
+
+```
+neighbor_sum('energy', "state['status'] == 'S'")
+```
+
+### `neighbor_any`
+
+```
+neighbor_any(filter_expr)
+```
+
+Returns whether at least one neighbour satisfies the filter. Equivalent to
+`neighbor_count(filter_expr) > 0`.
+
+**Parameters**
+
+- **`filter_expr`** : *text*. As for `neighbor_count`. This argument is required.
+
+**Returns** : *boolean*. The result is `False` when the agent has no neighbours.
+
+```
+neighbor_any("state['status'] == 'I'")
+```
+
+### `neighbor_all`
+
+```
+neighbor_all(filter_expr)
+```
+
+Returns whether every neighbour satisfies the filter. Equivalent to
+`neighbor_count(filter_expr) == len(neighbours)`.
+
+**Parameters**
+
+- **`filter_expr`** : *text*. As for `neighbor_count`. This argument is required.
+
+**Returns** : *boolean*. The result is **`True` when the agent has no neighbours.**
+
+<Callout title="Vacuous truth" type="warn">
+For an agent with no neighbours the condition holds vacuously, as with Python's
+`all([])`. To require at least one neighbour, combine the helper with a count:
+
+```
+neighbor_count() > 0 and neighbor_all("state['status'] == 'I'")
+```
+</Callout>
+
+### Filter syntax
+
+A filter is a text value inside an expression. The expression and the filter must
+therefore use different quotation marks. Within the filter, attributes are read with
+`state[...]`:
+
+```
+neighbor_count("state['status'] == 'I'")
+```
+
+A filter is evaluated against a single neighbour. It cannot contain a comprehension
+over `neighbours`.
+
+---
+
+## Random helpers
+
+The random helpers draw random numbers. They are available wherever an expression is
+evaluated, except in stopping conditions. Each helper accepts an optional `seed`.
+
+**Shared parameter**
+
+- **`seed`** : *integer, optional*. If given, the call uses a private generator created
+  from the seed and returns the same value on every invocation. If omitted, the call
+  takes the next value from the shared random stream of the simulation. The seed may be
+  passed by keyword (`seed=7`) or as the last positional argument. A seed that is not an
+  integer, or is a boolean, raises `TypeError`.
+
+**Shared errors**
+
+- Arguments outside the permitted range raise a `ValueError` that names the helper, for
+  example `binomial(): p must be in [0, 1], got 2`.
+- An incorrect number of arguments raises a `TypeError`.
+
+All helpers return native Python numbers (`float` or `int`).
+
+### `random`
+
+```
+random(seed=None)
+```
+
+Returns a random decimal in the range from 0, inclusive, to 1, exclusive.
+
+**Returns** : *float*.
+
+```
+random() < 0.05
+```
+
+### `normal`
+
+```
+normal(mean, std, seed=None)
+```
+
+Returns a value drawn from a normal distribution.
+
+**Parameters**
+
+- **`mean`** : *number*. The mean of the distribution.
+- **`std`** : *number, at least 0*. The standard deviation of the distribution.
+
+**Returns** : *float*.
+
+```
+normal(1.5, 0.3)
+```
+
+### `binomial`
+
+```
+binomial(n, p, seed=None)
+```
+
+Returns the number of successes in `n` independent trials, each with success
+probability `p`.
+
+**Parameters**
+
+- **`n`** : *integer, at least 0*. The number of trials.
+- **`p`** : *number from 0 to 1*. The probability of success in each trial.
+
+**Returns** : *int*.
+
+```
+binomial(10, 0.2)
+```
+
+### `poisson`
+
+```
+poisson(lam, seed=None)
+```
+
+Returns the number of events in a fixed interval, for events occurring at an average
+rate of `lam`.
+
+**Parameters**
+
+- **`lam`** : *number, at least 0*. The expected number of events.
+
+**Returns** : *int*.
+
+```
+poisson(3)
+```
+
+<Callout title="Reproducibility" type="info">
+Unseeded calls are reproducible across runs that use the same top-level `seed`, because
+each call takes the next value from a stream determined by that seed. A seeded call
+returns the same value on every invocation, regardless of the run `seed`. A seeded call
+inside a comprehension therefore returns the same value for every element.
+</Callout>
+
+---
+
+## Built-in functions
+
+Only the following standard functions can be called. 
+
+| Function | Returns |
+|---|---|
+| `any(items)` | `True` if at least one item is true |
+| `all(items)` | `True` if every item is true, and `True` for an empty collection |
+| `sum(items)` | The sum of the items |
+| `len(items)` | The number of items |
+| `min(items)` | The smallest item |
+| `max(items)` | The largest item |
+| `abs(x)` | The absolute value of `x` |
+| `round(x)` | `x` rounded to the nearest integer |
+
+```
+max(n['energy'] for n in neighbours)
+```
+
+---
+
+## Stopping conditions
+
+Stopping conditions are evaluated against the whole model at the end of each step. They
+use their own set of names and do not have access to `state` or `neighbours`.
+
+| Name | Returns |
+|---|---|
+| `model.count(expr)` | The number of agents that match |
+| `model.mean(attr)` | The mean of an attribute. Raises `ValueError` if there are no values. |
+| `model.sum(attr)` | The sum of an attribute |
+
+Stopping conditions support the same operators, conditional expressions and built-in
+functions as rules. They do not support the neighbour helpers or the random helpers. A
+stopping condition that calls either ends the run at the end of the first step with the
+stop reason `error`.
+
+---
+
+## Settings
+
+### Rule steps
+
+A plain step contains `field`, `expression` and, optionally, `topology_name`. A
+conditional step contains `condition`, `then` and, optionally, `else` and
+`topology_name`. Unknown keys are rejected. See
+[Writing rules](/docs/behaviour-expression#writing-rules) for the full description.
+
+When two or more topologies are configured, `topology_name` is required on any step or
+condition that uses a neighbour helper or `neighbours`. A name that does not match a
+configured topology is an error.
+
+### Sandbox limits
+
+The optional `sandbox` section of the simulation configuration limits comprehensions
+over neighbours.
+
+```json
+"sandbox": { "max_neighbours": 1000, "soft_hop_threshold": 1, "max_hops": null }
+```
+
+| Setting | Type | Default | Effect |
+|---|---|---|---|
+| `max_neighbours` | integer, at least 1 | `1000` | A comprehension over a larger neighbour set raises `NeighborSetTooLargeError`. |
+| `soft_hop_threshold` | integer, at least 0 | `1` | The number of hops beyond `neighbours` permitted before a warning is logged. |
+| `max_hops` | integer, at least 0, or `null` | `null` | With `null`, deeper nesting logs a warning only. With a number, deeper nesting raises `ComprehensionDepthError`. |
+
+Both error types are subclasses of `ValueError`. The hop warning is logged on the
+`simulator` logger once for each distinct expression. The neighbour cap applies only to
+expressions that contain a comprehension.

@@ -1,0 +1,107 @@
+---
+title: Scheduler
+description: Reference for the scheduler settings that decide which agents act in each step, and in what order.
+---
+
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+
+The **scheduler** decides which agents act in each step, in what order, and what state
+they read when they act. It is configured under the `scheduler` key of the simulation
+configuration.
+
+```json
+"scheduler": {
+  "order": "priority",
+  "priority_attribute": "energy",
+  "read_mode": "frozen",
+  "quota": { "mode": "step_random_subset", "limit": 30, "scope": "person" }
+}
+```
+
+**Parameters**
+
+- **`order`** : *one of `"all_at_once"`, `"random"`, `"priority"`, required*. How the
+  acting agents are ordered. See [Order](#order).
+- **`read_mode`** : *`"frozen"` or `"live"`, required*. What state agents read when
+  they act. See [Read mode](#read-mode).
+- **`priority_attribute`** : *text, optional*. The attribute that orders the agents. It
+  is required when `order` is `"priority"`.
+- **`quota`** : *quota settings, optional*. Limits how many agents act. If omitted,
+  every agent acts in every step. See [Quota](#quota).
+
+`order` and `read_mode` are independent, so any combination is permitted.
+
+**Raises** : a validation error when the configuration is built, if `order` or
+`read_mode` is missing or is not one of the permitted values, or if `order` is
+`"priority"` and `priority_attribute` is missing or empty:
+`scheduler.order is 'priority' but no priority_attribute was given.` An invalid
+`quota.mode` or `quota.limit` is also rejected. A missing `quota.scope` is not an error.
+
+---
+
+## Order
+
+| Value | Behaviour |
+|---|---|
+| `all_at_once` | All eligible agents act, with no random or attribute-based ordering. |
+| `random` | The eligible agents act in a random order. |
+| `priority` | The eligible agents act in descending order of `priority_attribute`, so agents with the highest values act first. |
+
+Agents with equal `priority_attribute` values form a group. The order within a group is
+shuffled afresh at every step, and no secondary sort is applied. An agent that does not
+have the attribute is treated as having the value `0`.
+
+With `random`, the order is shuffled again at every step.
+
+---
+
+## Read mode
+
+| Value | Behaviour |
+|---|---|
+| `frozen` | Neighbour reads see the population as it was at the start of the step. The result does not depend on which agent acts first. |
+| `live` | Neighbour reads see the population as it is at the moment of the read. |
+
+The scheduler decides which agents act and in what order. The read mode is applied when
+the agents act, to neighbour reads in behaviour modules and in rules. An agent's reads
+of its own attributes always see its own earlier changes.
+
+---
+
+## Quota
+
+A quota limits how many agents act. There are two modes, which are alternatives and
+cannot be combined.
+
+```json
+"quota": { "mode": "lifetime_budget", "limit": 10 }
+```
+
+**Parameters**
+
+- **`mode`** : *`"step_random_subset"` or `"lifetime_budget"`*. The kind of quota.
+- **`limit`** : *integer*. The size of the quota. Its meaning depends on `mode`.
+- **`scope`** : *text, optional*. An agent type name. If omitted or null, the quota
+  applies across the whole population.
+
+### Modes
+
+| Mode | Behaviour |
+|---|---|
+| `step_random_subset` | In each step, `limit` agents are sampled at random from the scope. No information is kept between steps. |
+| `lifetime_budget` | Each agent may act `limit` times in total across the whole run. The remaining count persists between steps. |
+
+The remaining count of `lifetime_budget` is stored in the agent's own state, under the
+key `actions_remaining`.
+
+### Scope
+
+| `scope` | Behaviour |
+|---|---|
+| An agent type name | The quota applies only to agents of that type. Agents of other types are always eligible and are not affected. |
+| Omitted or null | The quota applies across the whole population, regardless of type. |
+
+For example, with `limit` set to 30 and no scope, 30 agents of any type act in a step.
+With `scope` set to `"predator"`, 30 predators act, and all other agents act as usual.

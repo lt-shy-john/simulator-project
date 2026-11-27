@@ -5,10 +5,10 @@ Returns the full directed neighbour set for each agent — every other agent
 in the population is a neighbour. This produces N-1 neighbours per agent
 (N² - N total pairs across the population).
 
-Self-interaction is excluded by default. This means agent A will never
-appear in its own neighbour list. This is not configurable in the current
-implementation — enabling self-interaction is an unusual case and deferred
-to a later ticket if needed.
+Self-interaction is excluded by default. This means agent A will not
+appear in its own neighbour list. Set allow_self_interaction to True in
+the topology config to include each agent in its own neighbour list, which
+gives N neighbours per agent (N² total pairs).
 
 Cross-type interactions are included by default — get_neighbours for a
 predator returns both predator and prey IDs. To restrict to specific
@@ -23,10 +23,14 @@ Config shape:
       contact:
         mode: all_pairs
         agent_types: null           # optional, null means all types
-        # or
+        allow_self_interaction: false   # optional, default false
+      # or
+      contact:
+        mode: all_pairs
         agent_types:
           - predator
           - prey
+        allow_self_interaction: true
 """
 
 from __future__ import annotations

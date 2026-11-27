@@ -8,7 +8,9 @@ Supports two sampling modes:
 
 Sampling is with replacement, so duplicates are possible when k is large
 relative to population size. If k exceeds the eligible pool size in fixed
-mode, all eligible agents are returned (capped, no error raised).
+mode, the sample size is capped at the pool size (no error raised). Because
+sampling is with replacement, a capped sample can still repeat some agents
+and omit others.
 
 Self-interaction is excluded — agent A will never appear in its own
 neighbour list. This is not configurable in the current implementation;

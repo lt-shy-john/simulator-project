@@ -52,59 +52,59 @@ from typing import Any, Callable
 import numpy as np
 from numpy.random import Generator
 
-DrawFn = Callable[..., "int | float"]
+DrawFn = Callable[..., 'int | float']
 
 
 @dataclass(frozen=True)
 class _Spec:
-    """A registered distribution: its draw function and positional arity."""
+	"""A registered distribution: its draw function and positional arity."""
 
-    draw: DrawFn
-    arity: int  # number of distribution parameters, excluding rng and seed
+	draw: DrawFn
+	arity: int  # number of distribution parameters, excluding rng and seed
 
 
 _REGISTRY: dict[str, _Spec] = {}
 
 
 def distribution(name: str) -> Callable[[DrawFn], DrawFn]:
-    """Register a draw function as a sandbox helper called ``name``.
+	"""Register a draw function as a sandbox helper called ``name``.
 
-    The decorated function must take the ``Generator`` as its first argument,
-    followed by the distribution parameters.
+	The decorated function must take the ``Generator`` as its first argument,
+	followed by the distribution parameters.
 
-    Args:
-        name: The name exposed to expressions.
+	Args:
+	    name: The name exposed to expressions.
 
-    Returns:
-        The decorator; the draw function is returned unchanged.
+	Returns:
+	    The decorator; the draw function is returned unchanged.
 
-    Raises:
-        ValueError: If ``name`` is already registered.
-    """
+	Raises:
+	    ValueError: If ``name`` is already registered.
+	"""
 
-    def decorator(fn: DrawFn) -> DrawFn:
-        if name in _REGISTRY:
-            raise ValueError(f"Distribution {name!r} is already registered")
-        arity = len(inspect.signature(fn).parameters) - 1
-        _REGISTRY[name] = _Spec(draw=fn, arity=arity)
-        return fn
+	def decorator(fn: DrawFn) -> DrawFn:
+		if name in _REGISTRY:
+			raise ValueError(f'Distribution {name!r} is already registered')
+		arity = len(inspect.signature(fn).parameters) - 1
+		_REGISTRY[name] = _Spec(draw=fn, arity=arity)
+		return fn
 
-    return decorator
+	return decorator
 
 
 def _is_int(value: Any) -> bool:
-    """Return True for real integers (bool is rejected)."""
-    return isinstance(value, (int, np.integer)) and not isinstance(value, bool)
+	"""Return True for real integers (bool is rejected)."""
+	return isinstance(value, (int, np.integer)) and not isinstance(value, bool)
 
 
 def _check_seed(seed: Any) -> None:
-    """Validate a per-call seed.
+	"""Validate a per-call seed.
 
-    Raises:
-        TypeError: If ``seed`` is neither ``None`` nor an integer.
-    """
-    if seed is not None and not _is_int(seed):
-        raise TypeError(f"seed must be an int or None, got {type(seed).__name__}")
+	Raises:
+	    TypeError: If ``seed`` is neither ``None`` nor an integer.
+	"""
+	if seed is not None and not _is_int(seed):
+		raise TypeError(f'seed must be an int or None, got {type(seed).__name__}')
 
 
 # --------------------------------------------------------------------------
@@ -112,36 +112,36 @@ def _check_seed(seed: Any) -> None:
 # --------------------------------------------------------------------------
 
 
-@distribution("random")
+@distribution('random')
 def _random(rng: Generator) -> float:
-    """Uniform float in [0, 1)."""
-    return float(rng.random())
+	"""Uniform float in [0, 1)."""
+	return float(rng.random())
 
 
-@distribution("normal")
+@distribution('normal')
 def _normal(rng: Generator, mean: float, std: float) -> float:
-    """Normal (Gaussian) draw with the given mean and standard deviation."""
-    if not std >= 0:  # also rejects NaN
-        raise ValueError(f"normal(): std must be >= 0, got {std!r}")
-    return float(rng.normal(mean, std))
+	"""Normal (Gaussian) draw with the given mean and standard deviation."""
+	if not std >= 0:  # also rejects NaN
+		raise ValueError(f'normal(): std must be >= 0, got {std!r}')
+	return float(rng.normal(mean, std))
 
 
-@distribution("binomial")
+@distribution('binomial')
 def _binomial(rng: Generator, n: int, p: float) -> int:
-    """Number of successes in ``n`` independent trials of probability ``p``."""
-    if not _is_int(n) or n < 0:
-        raise ValueError(f"binomial(): n must be an integer >= 0, got {n!r}")
-    if not 0 <= p <= 1:  # also rejects NaN
-        raise ValueError(f"binomial(): p must be in [0, 1], got {p!r}")
-    return int(rng.binomial(n, p))
+	"""Number of successes in ``n`` independent trials of probability ``p``."""
+	if not _is_int(n) or n < 0:
+		raise ValueError(f'binomial(): n must be an integer >= 0, got {n!r}')
+	if not 0 <= p <= 1:  # also rejects NaN
+		raise ValueError(f'binomial(): p must be in [0, 1], got {p!r}')
+	return int(rng.binomial(n, p))
 
 
-@distribution("poisson")
+@distribution('poisson')
 def _poisson(rng: Generator, lam: float) -> int:
-    """Poisson draw with rate ``lam``."""
-    if not lam >= 0:  # also rejects NaN
-        raise ValueError(f"poisson(): lam must be >= 0, got {lam!r}")
-    return int(rng.poisson(lam))
+	"""Poisson draw with rate ``lam``."""
+	if not lam >= 0:  # also rejects NaN
+		raise ValueError(f'poisson(): lam must be >= 0, got {lam!r}')
+	return int(rng.poisson(lam))
 
 
 # --------------------------------------------------------------------------
@@ -150,49 +150,48 @@ def _poisson(rng: Generator, lam: float) -> int:
 
 
 def _bind(name: str, spec: _Spec, rng: Generator) -> Callable[..., int | float]:
-    """Create the sandbox-facing helper for one distribution.
+	"""Create the sandbox-facing helper for one distribution.
 
-    Args:
-        name: Helper name (used in error messages).
-        spec: The registered draw function and its arity.
-        rng: The simulation's shared generator, used for unseeded calls.
+	Args:
+	    name: Helper name (used in error messages).
+	    spec: The registered draw function and its arity.
+	    rng: The simulation's shared generator, used for unseeded calls.
 
-    Returns:
-        A callable accepting the distribution parameters plus optional ``seed``.
-    """
+	Returns:
+	    A callable accepting the distribution parameters plus optional ``seed``.
+	"""
 
-    def helper(*args: Any, seed: int | None = None) -> int | float:
-        """Draw a value; ``seed`` (optional) makes the call self-contained."""
-        if len(args) == spec.arity + 1:
-            if seed is not None:
-                raise TypeError(f"{name}() got multiple values for 'seed'")
-            *args, seed = args
-        elif len(args) != spec.arity:
-            raise TypeError(
-                f"{name}() takes {spec.arity} positional argument(s) "
-                f"plus optional seed, got {len(args)}"
-            )
-        _check_seed(seed)
-        source = rng if seed is None else np.random.default_rng(seed)
-        return spec.draw(source, *args)
+	def helper(*args: Any, seed: int | None = None) -> int | float:
+		"""Draw a value; ``seed`` (optional) makes the call self-contained."""
+		if len(args) == spec.arity + 1:
+			if seed is not None:
+				raise TypeError(f"{name}() got multiple values for 'seed'")
+			*args, seed = args
+		elif len(args) != spec.arity:
+			raise TypeError(f'{name}() takes {spec.arity} positional argument(s) plus optional seed, got {len(args)}')
+		_check_seed(seed)
+		source = rng if seed is None else np.random.default_rng(seed)
+		return spec.draw(source, *args)
 
-    helper.__name__ = name
-    return helper
+	helper.__name__ = name
+	return helper
 
 
-def build_distribution_functions(rng: Generator) -> dict[str, Callable[..., int | float]]:
-    """Build the helper dict to merge into the sandbox's ``functions``.
+def build_distribution_functions(
+	rng: Generator,
+) -> dict[str, Callable[..., int | float]]:
+	"""Build the helper dict to merge into the sandbox's ``functions``.
 
-    Args:
-        rng: The simulation's central generator (S-11). Unseeded helper
-            calls draw from it; seeded calls never touch it.
+	Args:
+	    rng: The simulation's central generator (S-11). Unseeded helper
+	        calls draw from it; seeded calls never touch it.
 
-    Returns:
-        Mapping of helper name to callable, for every registered distribution.
-    """
-    return {name: _bind(name, spec, rng) for name, spec in _REGISTRY.items()}
+	Returns:
+	    Mapping of helper name to callable, for every registered distribution.
+	"""
+	return {name: _bind(name, spec, rng) for name, spec in _REGISTRY.items()}
 
 
 def available_distributions() -> tuple[str, ...]:
-    """Return the names of all registered helpers (for docs and error text)."""
-    return tuple(_REGISTRY)
+	"""Return the names of all registered helpers (for docs and error text)."""
+	return tuple(_REGISTRY)

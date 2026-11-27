@@ -43,7 +43,7 @@ from typing import Callable, TypeVar
 
 from behaviour.base import BehaviourModule
 
-T = TypeVar("T", bound=BehaviourModule)
+T = TypeVar('T', bound=BehaviourModule)
 
 
 # Registry is a module-level dict — one registry shared across the whole
@@ -52,75 +52,76 @@ _registry: dict[str, type[BehaviourModule]] = {}
 
 
 def register_behaviour(name: str) -> Callable[[T], T]:
-    """Decorator that registers a BehaviourModule class under `name`.
+	"""Decorator that registers a BehaviourModule class under `name`.
 
-    Usage:
-        @register_behaviour("SIRInfection")
-        class SIRInfection(BehaviourModule):
-            ...
+	Usage:
+	    @register_behaviour("SIRInfection")
+	    class SIRInfection(BehaviourModule):
+	        ...
 
-    The decorated class is returned unchanged — this only has the side
-    effect of adding it to the registry.
+	The decorated class is returned unchanged — this only has the side
+	effect of adding it to the registry.
 
-    Args:
-        name: the name this module will be looked up by from config
+	Args:
+	    name: the name this module will be looked up by from config
 
-    Returns:
-        a decorator function
+	Returns:
+	    a decorator function
 
-    Raises:
-        ValueError: if `name` is already registered to a different class
-            (re-registering the exact same class under the same name is
-            harmless and allowed, to tolerate module re-import during
-            testing or reload)
-    """
-    def decorator(cls: T) -> T:
-        if name in _registry and _registry[name] is not cls:
-            raise ValueError(
-                f"Behaviour module name '{name}' is already registered to "
-                f"'{_registry[name].__name__}'. Cannot register '{cls.__name__}' "
-                f"under the same name. Choose a different name, or check for "
-                f"a duplicate registration."
-            )
-        _registry[name] = cls
-        return cls
+	Raises:
+	    ValueError: if `name` is already registered to a different class
+	        (re-registering the exact same class under the same name is
+	        harmless and allowed, to tolerate module re-import during
+	        testing or reload)
+	"""
 
-    return decorator
+	def decorator(cls: T) -> T:
+		if name in _registry and _registry[name] is not cls:
+			raise ValueError(
+				f"Behaviour module name '{name}' is already registered to "
+				f"'{_registry[name].__name__}'. Cannot register '{cls.__name__}' "
+				f'under the same name. Choose a different name, or check for '
+				f'a duplicate registration.'
+			)
+		_registry[name] = cls
+		return cls
+
+	return decorator
 
 
 def get_behaviour(name: str) -> type[BehaviourModule]:
-    """Look up a registered BehaviourModule class by name.
+	"""Look up a registered BehaviourModule class by name.
 
-    Args:
-        name: the registered module name (as used in config)
+	Args:
+	    name: the registered module name (as used in config)
 
-    Returns:
-        the BehaviourModule class (not an instance — caller constructs
-        it with whatever params come from config)
+	Returns:
+	    the BehaviourModule class (not an instance — caller constructs
+	    it with whatever params come from config)
 
-    Raises:
-        KeyError: if `name` is not registered. Message includes the list
-            of currently registered names, which is often the fastest way
-            to spot a typo or a missing import (see module docstring note
-            about __init__.py needing to import every module file).
-    """
-    if name not in _registry:
-        raise KeyError(
-            f"Unknown behaviour module '{name}'. "
-            f"Registered modules: {sorted(_registry.keys())}. "
-            f"If you expected '{name}' to be registered, check that the "
-            f"file defining it is actually imported somewhere at startup."
-        )
-    return _registry[name]
+	Raises:
+	    KeyError: if `name` is not registered. Message includes the list
+	        of currently registered names, which is often the fastest way
+	        to spot a typo or a missing import (see module docstring note
+	        about __init__.py needing to import every module file).
+	"""
+	if name not in _registry:
+		raise KeyError(
+			f"Unknown behaviour module '{name}'. "
+			f'Registered modules: {sorted(_registry.keys())}. '
+			f"If you expected '{name}' to be registered, check that the "
+			f'file defining it is actually imported somewhere at startup.'
+		)
+	return _registry[name]
 
 
 def list_registered() -> list[str]:
-    """Return a sorted list of all currently registered behaviour module names."""
-    return sorted(_registry.keys())
+	"""Return a sorted list of all currently registered behaviour module names."""
+	return sorted(_registry.keys())
 
 
 def _clear_registry_for_testing() -> None:
-    """Clear the registry. Intended for use in test teardown only, to
-    avoid state leaking between tests that register modules under the
-    same name. Not part of the public API."""
-    _registry.clear()
+	"""Clear the registry. Intended for use in test teardown only, to
+	avoid state leaking between tests that register modules under the
+	same name. Not part of the public API."""
+	_registry.clear()

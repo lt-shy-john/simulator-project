@@ -49,119 +49,121 @@ from topology.topology import validate_agent_types
 
 
 class RandomSampleTopology:
-    """Topology implementation that returns a random subset of agents
-    as neighbours.
+	"""Topology implementation that returns a random subset of agents
+	as neighbours.
 
-    Satisfies TopologyProtocol structurally — no inheritance needed.
-    """
+	Satisfies TopologyProtocol structurally — no inheritance needed.
+	"""
 
-    def __init__(
-            self,
-            k: int | None = None,
-            proportion: float | None = None,
-            seed: int | None = None,
-            rng: np.random.Generator | None = None,
-            agent_types: list[str] | None = None,
-    ):
-        """
-        Args:
-            k: fixed number of neighbours to sample. Mutually exclusive
-                with proportion.
-            proportion: fraction of eligible population to sample (0.0–1.0).
-                Mutually exclusive with k.
-            seed: random seed for this topology instance. Optional.
-            rng: random seed taken from config. Optional
-            agent_types: if set, only agents of these types are eligible
-                as neighbours. If None, all types are included.
+	def __init__(
+		self,
+		k: int | None = None,
+		proportion: float | None = None,
+		seed: int | None = None,
+		rng: np.random.Generator | None = None,
+		agent_types: list[str] | None = None,
+	):
+		"""
+		Args:
+		    k: fixed number of neighbours to sample. Mutually exclusive
+		        with proportion.
+		    proportion: fraction of eligible population to sample (0.0–1.0).
+		        Mutually exclusive with k.
+		    seed: random seed for this topology instance. Optional.
+		    rng: random seed taken from config. Optional
+		    agent_types: if set, only agents of these types are eligible
+		        as neighbours. If None, all types are included.
 
-        Raises:
-            ValueError: if neither or both of k and proportion are set,
-                or if proportion is outside (0.0, 1.0].
-        """
-        if k is None and proportion is None:
-            raise ValueError("RandomSampleTopology requires either 'k' or 'proportion'.")
-        if k is not None and proportion is not None:
-            raise ValueError("RandomSampleTopology requires either 'k' or 'proportion', not both.")
-        if proportion is not None and not (0.0 < proportion <= 1.0):
-            raise ValueError(f"proportion must be in (0.0, 1.0], got {proportion}.")
-        if k is not None and k < 1:
-            raise ValueError(f"k must be >= 1, got {k}.")
+		Raises:
+		    ValueError: if neither or both of k and proportion are set,
+		        or if proportion is outside (0.0, 1.0].
+		"""
+		if k is None and proportion is None:
+			raise ValueError("RandomSampleTopology requires either 'k' or 'proportion'.")
+		if k is not None and proportion is not None:
+			raise ValueError("RandomSampleTopology requires either 'k' or 'proportion', not both.")
+		if proportion is not None and not (0.0 < proportion <= 1.0):
+			raise ValueError(f'proportion must be in (0.0, 1.0], got {proportion}.')
+		if k is not None and k < 1:
+			raise ValueError(f'k must be >= 1, got {k}.')
 
-        self.k = k
-        self.proportion = proportion
-        self.agent_types = agent_types
-        self.seed = seed  # NEW — retained for to_config()
-        self.rng = rng if rng is not None else np.random.default_rng(seed)
+		self.k = k
+		self.proportion = proportion
+		self.agent_types = agent_types
+		self.seed = seed  # NEW — retained for to_config()
+		self.rng = rng if rng is not None else np.random.default_rng(seed)
 
-    @classmethod
-    def from_config(cls, config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None) -> "RandomSampleTopology":
-        """Construct from a topology config section.
+	@classmethod
+	def from_config(
+		cls, config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None
+	) -> 'RandomSampleTopology':
+		"""Construct from a topology config section.
 
-        Args:
-            config: the config dict for this topology, e.g.
-                {
-                    "mode": "random_sample",
-                    "k": 5,
-                    "seed": 42,
-                    "agent_types": ["person"]
-                }
-            soa: the current SoAPopulation, used to validate agent_types
-                 refers to real agent types present in the population
-            rng: shared seeded generator, forwarded by build_topologies fo
-                 signature consistency with TopologyProtocol. Unused here —
-                 an all-pairs topology has no randomness to seed.
-        """
-        agent_types = config.get("agent_types", None)
-        validate_agent_types(agent_types, soa)
-        return cls(
-            k=config.get("k", None),
-            proportion=config.get("proportion", None),
-            seed=config.get("seed", None),
-            agent_types=agent_types,
-        )
+		Args:
+		    config: the config dict for this topology, e.g.
+		        {
+		            "mode": "random_sample",
+		            "k": 5,
+		            "seed": 42,
+		            "agent_types": ["person"]
+		        }
+		    soa: the current SoAPopulation, used to validate agent_types
+		         refers to real agent types present in the population
+		    rng: shared seeded generator, forwarded by build_topologies fo
+		         signature consistency with TopologyProtocol. Unused here —
+		         an all-pairs topology has no randomness to seed.
+		"""
+		agent_types = config.get('agent_types', None)
+		validate_agent_types(agent_types, soa)
+		return cls(
+			k=config.get('k', None),
+			proportion=config.get('proportion', None),
+			seed=config.get('seed', None),
+			agent_types=agent_types,
+		)
 
-    def _get_eligible_pool(self, agent_id: str, soa: SoAPopulation) -> list[str]:
-        """Build the eligible neighbour pool, excluding self and
-        filtering by agent_types if specified."""
-        pool: list[str] = []
+	def _get_eligible_pool(self, agent_id: str, soa: SoAPopulation) -> list[str]:
+		"""Build the eligible neighbour pool, excluding self and
+		filtering by agent_types if specified."""
+		pool: list[str] = []
 
-        for type_name, arrays in soa.items():
-            if self.agent_types is not None and type_name not in self.agent_types:
-                continue
-            for id_ in arrays[ID_KEY]:
-                id_str = str(id_)
-                if id_str != agent_id:  # always exclude self
-                    pool.append(id_str)
+		for type_name, arrays in soa.items():
+			if self.agent_types is not None and type_name not in self.agent_types:
+				continue
+			for id_ in arrays[ID_KEY]:
+				id_str = str(id_)
+				if id_str != agent_id:  # always exclude self
+					pool.append(id_str)
 
-        return pool
+		return pool
 
-    def _sample_size(self, pool_size: int) -> int:
-        """Determine how many neighbours to sample given the pool size."""
-        if self.k is not None:
-            # Fixed mode — cap at pool size to avoid errors
-            return min(self.k, pool_size)
-        else:
-            # Proportional mode — at least 1 neighbour
-            return max(1, math.ceil(self.proportion * pool_size))
+	def _sample_size(self, pool_size: int) -> int:
+		"""Determine how many neighbours to sample given the pool size."""
+		if self.k is not None:
+			# Fixed mode — cap at pool size to avoid errors
+			return min(self.k, pool_size)
+		else:
+			# Proportional mode — at least 1 neighbour
+			return max(1, math.ceil(self.proportion * pool_size))
 
-    def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:
-        """Return a random sample of agent IDs from the eligible pool.
+	def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:
+		"""Return a random sample of agent IDs from the eligible pool.
 
-        Sampling is with replacement. Self is always excluded.
+		Sampling is with replacement. Self is always excluded.
 
-        Args:
-            agent_id: the ID of the focal agent
-            soa: the current SoAPopulation
+		Args:
+		    agent_id: the ID of the focal agent
+		    soa: the current SoAPopulation
 
-        Returns:
-            list of neighbour agent ID strings, length determined by
-            k or proportion. Empty list if no eligible neighbours exist.
-        """
-        pool = self._get_eligible_pool(agent_id, soa)
+		Returns:
+		    list of neighbour agent ID strings, length determined by
+		    k or proportion. Empty list if no eligible neighbours exist.
+		"""
+		pool = self._get_eligible_pool(agent_id, soa)
 
-        if not pool:
-            return []
+		if not pool:
+			return []
 
-        sample_size = self._sample_size(len(pool))
-        indices = self.rng.integers(0, len(pool), size=sample_size)
-        return [pool[i] for i in indices]
+		sample_size = self._sample_size(len(pool))
+		indices = self.rng.integers(0, len(pool), size=sample_size)
+		return [pool[i] for i in indices]

@@ -4,6 +4,7 @@ Provides AST-based hop analysis, a lazily-built neighbour namespace, and
 a helper that enables comprehension nodes on a simpleeval evaluator.
 Both ``neighbors`` and ``neighbours`` are accepted as name and key.
 """
+
 from __future__ import annotations
 
 import ast
@@ -16,316 +17,301 @@ from functools import lru_cache
 from pydantic import BaseModel, Field
 from simpleeval import EvalWithCompoundTypes
 
-logger = logging.getLogger("simulator")
+logger = logging.getLogger('simulator')
 
 COMPREHENSION_NODES: tuple[type[ast.AST], ...] = (
-    ast.ListComp,
-    ast.GeneratorExp,
-    ast.SetComp,
+	ast.ListComp,
+	ast.GeneratorExp,
+	ast.SetComp,
 )
-NEIGHBORS_NAMES = ("neighbors", "neighbours")
+NEIGHBORS_NAMES = ('neighbors', 'neighbours')
 SOFT_HOP_THRESHOLD = 1  # hops beyond `neighbors` before a warning is emitted
 DEFAULT_MAX_NEIGHBORS = 1000
 
+
 class SandboxConfig(BaseModel):
-    """Tunable limits for comprehensions in the expression sandbox.
+	"""Tunable limits for comprehensions in the expression sandbox.
 
-    Attributes:
-        max_neighbours: Largest neighbour set a comprehension may iterate.
-        soft_hop_threshold: Hops beyond ``neighbours`` before a warning is
-            logged (the expression still evaluates).
-        max_hops: Optional hard cap; ``None`` means warn only.
-    """
+	Attributes:
+	    max_neighbours: Largest neighbour set a comprehension may iterate.
+	    soft_hop_threshold: Hops beyond ``neighbours`` before a warning is
+	        logged (the expression still evaluates).
+	    max_hops: Optional hard cap; ``None`` means warn only.
+	"""
 
-    max_neighbours: int = Field(DEFAULT_MAX_NEIGHBORS, ge=1)
-    soft_hop_threshold: int = Field(SOFT_HOP_THRESHOLD, ge=0)
-    max_hops: int | None = Field(None, ge=0)
+	max_neighbours: int = Field(DEFAULT_MAX_NEIGHBORS, ge=1)
+	soft_hop_threshold: int = Field(SOFT_HOP_THRESHOLD, ge=0)
+	max_hops: int | None = Field(None, ge=0)
 
 
 _warned: set[tuple[str, int]] = set()
 
 
 def reset_policy_caches() -> None:
-    """Clear the analysis cache and the warned-expression set (for tests)."""
-    analyse_expression.cache_clear()
-    _warned.clear()
+	"""Clear the analysis cache and the warned-expression set (for tests)."""
+	analyse_expression.cache_clear()
+	_warned.clear()
 
 
-def check_neighbour_cap(
-    neighbours: Sized, max_neighbours: int, *, agent_id: str | None = None
-) -> None:
-    """Reject a neighbour set larger than ``max_neighbours``.
+def check_neighbour_cap(neighbours: Sized, max_neighbours: int, *, agent_id: str | None = None) -> None:
+	"""Reject a neighbour set larger than ``max_neighbours``.
 
-    Raises:
-        NeighborSetTooLargeError: if ``len(neighbours) > max_neighbours``.
-    """
-    if len(neighbours) > max_neighbours:
-        raise NeighborSetTooLargeError(
-            f"Agent {agent_id!r} has {len(neighbours)} neighbours; "
-            f"comprehensions are capped at {max_neighbours}. Use a helper "
-            f"such as neighbor_count(...) or raise sandbox.max_neighbours."
-        )
+	Raises:
+	    NeighborSetTooLargeError: if ``len(neighbours) > max_neighbours``.
+	"""
+	if len(neighbours) > max_neighbours:
+		raise NeighborSetTooLargeError(
+			f'Agent {agent_id!r} has {len(neighbours)} neighbours; '
+			f'comprehensions are capped at {max_neighbours}. Use a helper '
+			f'such as neighbor_count(...) or raise sandbox.max_neighbours.'
+		)
 
 
 class ComprehensionDepthError(ValueError):
-    """Raised when nesting exceeds an explicitly configured hard hop cap."""
+	"""Raised when nesting exceeds an explicitly configured hard hop cap."""
 
 
 class NeighborSetTooLargeError(ValueError):
-    """Raised when a neighbour set exceeds the configured size cap."""
+	"""Raised when a neighbour set exceeds the configured size cap."""
 
 
 class NeighborSource(Protocol):
-    """Anything that can list neighbour IDs (assumed topology interface)."""
+	"""Anything that can list neighbour IDs (assumed topology interface)."""
 
-    def neighbors(self, agent_id: str) -> Iterable[str]: ...
+	def neighbors(self, agent_id: str) -> Iterable[str]: ...
 
 
 @dataclass(frozen=True)
 class ComprehensionReport:
-    """Result of statically analysing an expression.
+	"""Result of statically analysing an expression.
 
-    Attributes:
-        uses_neighbors: True if either neighbour name is referenced.
-        has_comprehension: True if any comprehension node is present.
-        max_hop: Deepest neighbour hop reached (0 = the neighbours name
-            itself, 1 = ``n['neighbors']``, ...); -1 if none.
-        warnings: Human-readable warnings, suitable for logging or a UI box.
-    """
+	Attributes:
+	    uses_neighbors: True if either neighbour name is referenced.
+	    has_comprehension: True if any comprehension node is present.
+	    max_hop: Deepest neighbour hop reached (0 = the neighbours name
+	        itself, 1 = ``n['neighbors']``, ...); -1 if none.
+	    warnings: Human-readable warnings, suitable for logging or a UI box.
+	"""
 
-    uses_neighbors: bool
-    has_comprehension: bool
-    max_hop: int
-    warnings: tuple[str, ...] = ()
+	uses_neighbors: bool
+	has_comprehension: bool
+	max_hop: int
+	warnings: tuple[str, ...] = ()
 
 
 def _target_names(target: ast.AST) -> list[str]:
-    """Return all variable names bound by a comprehension target."""
-    return [n.id for n in ast.walk(target) if isinstance(n, ast.Name)]
+	"""Return all variable names bound by a comprehension target."""
+	return [n.id for n in ast.walk(target) if isinstance(n, ast.Name)]
 
 
 def _iter_hop(node: ast.AST, scope: Mapping[str, int]) -> int | None:
-    """Return the hop level of an iterable expression, or None if it isn't
-    neighbour-derived.
+	"""Return the hop level of an iterable expression, or None if it isn't
+	neighbour-derived.
 
-    ``neighbors``/``neighbours`` is hop 0; ``x['neighbors']`` where ``x`` was
-    bound from a hop-k iterable is hop k+1.
-    """
-    if isinstance(node, ast.Name) and node.id in NEIGHBORS_NAMES and node.id not in scope:
-        return 0
-    if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
-        base_hop = scope.get(node.value.id)
-        key = node.slice
-        if (
-            base_hop is not None
-            and isinstance(key, ast.Constant)
-            and key.value in NEIGHBORS_NAMES
-        ):
-            return base_hop + 1
-    return None
+	``neighbors``/``neighbours`` is hop 0; ``x['neighbors']`` where ``x`` was
+	bound from a hop-k iterable is hop k+1.
+	"""
+	if isinstance(node, ast.Name) and node.id in NEIGHBORS_NAMES and node.id not in scope:
+		return 0
+	if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
+		base_hop = scope.get(node.value.id)
+		key = node.slice
+		if base_hop is not None and isinstance(key, ast.Constant) and key.value in NEIGHBORS_NAMES:
+			return base_hop + 1
+	return None
 
 
 def _max_hop(node: ast.AST, scope: Mapping[str, int]) -> int:
-    """Recursively compute the deepest neighbour hop under ``node``.
+	"""Recursively compute the deepest neighbour hop under ``node``.
 
-    A neighbour lookup such as ``n['neighbours']`` counts wherever it
-    appears, not only when it is the iterable of a comprehension (so
-    ``len(n['neighbours'])`` inside an elt is hop 1).
-    """
-    deepest = -1
-    if isinstance(node, COMPREHENSION_NODES):
-        inner = dict(scope)
-        for gen in node.generators:
-            deepest = max(deepest, _max_hop(gen.iter, inner))
-            hop = _iter_hop(gen.iter, inner)
-            names = _target_names(gen.target)
-            if hop is not None:
-                deepest = max(deepest, hop)
-                inner.update({name: hop for name in names})
-            else:
-                for name in names:
-                    inner.pop(name, None)
-            for cond in gen.ifs:
-                deepest = max(deepest, _max_hop(cond, inner))
-        return max(deepest, _max_hop(node.elt, inner))
-    if isinstance(node, ast.Subscript):
-        hop = _iter_hop(node, scope)
-        if hop is not None:
-            deepest = max(deepest, hop)
-    for child in ast.iter_child_nodes(node):
-        deepest = max(deepest, _max_hop(child, scope))
-    return deepest
+	A neighbour lookup such as ``n['neighbours']`` counts wherever it
+	appears, not only when it is the iterable of a comprehension (so
+	``len(n['neighbours'])`` inside an elt is hop 1).
+	"""
+	deepest = -1
+	if isinstance(node, COMPREHENSION_NODES):
+		inner = dict(scope)
+		for gen in node.generators:
+			deepest = max(deepest, _max_hop(gen.iter, inner))
+			hop = _iter_hop(gen.iter, inner)
+			names = _target_names(gen.target)
+			if hop is not None:
+				deepest = max(deepest, hop)
+				inner.update({name: hop for name in names})
+			else:
+				for name in names:
+					inner.pop(name, None)
+			for cond in gen.ifs:
+				deepest = max(deepest, _max_hop(cond, inner))
+		return max(deepest, _max_hop(node.elt, inner))
+	if isinstance(node, ast.Subscript):
+		hop = _iter_hop(node, scope)
+		if hop is not None:
+			deepest = max(deepest, hop)
+	for child in ast.iter_child_nodes(node):
+		deepest = max(deepest, _max_hop(child, scope))
+	return deepest
 
 
 @lru_cache(maxsize=1024)
 def analyse_expression(expr: str) -> ComprehensionReport:
-    """Statically analyse ``expr`` for comprehension use and nesting depth.
+	"""Statically analyse ``expr`` for comprehension use and nesting depth.
 
-    Syntax errors yield an empty report; the evaluator will raise the real
-    error with its own message.
-    """
-    try:
-        tree = ast.parse(expr.strip(), mode="eval")
-    except SyntaxError:
-        return ComprehensionReport(False, False, -1)
-    nodes = list(ast.walk(tree))
-    return ComprehensionReport(
-        uses_neighbors=any(
-            isinstance(n, ast.Name) and n.id in NEIGHBORS_NAMES for n in nodes
-        ),
-        has_comprehension=any(isinstance(n, COMPREHENSION_NODES) for n in nodes),
-        max_hop=_max_hop(tree, {}),
-    )
+	Syntax errors yield an empty report; the evaluator will raise the real
+	error with its own message.
+	"""
+	try:
+		tree = ast.parse(expr.strip(), mode='eval')
+	except SyntaxError:
+		return ComprehensionReport(False, False, -1)
+	nodes = list(ast.walk(tree))
+	return ComprehensionReport(
+		uses_neighbors=any(isinstance(n, ast.Name) and n.id in NEIGHBORS_NAMES for n in nodes),
+		has_comprehension=any(isinstance(n, COMPREHENSION_NODES) for n in nodes),
+		max_hop=_max_hop(tree, {}),
+	)
 
 
 def check_comprehension_policy(
-    expr: str,
-    *,
-    soft_threshold: int = SOFT_HOP_THRESHOLD,
-    max_hops: int | None = None,
+	expr: str,
+	*,
+	soft_threshold: int = SOFT_HOP_THRESHOLD,
+	max_hops: int | None = None,
 ) -> ComprehensionReport:
-    """Analyse ``expr`` and apply the nesting policy.
+	"""Analyse ``expr`` and apply the nesting policy.
 
-    Exceeding ``soft_threshold`` records a warning on the report every time
-    (so a UI box can show it) but only *logs* it once per distinct
-    expression. If ``max_hops`` is set and exceeded, raises instead.
+	Exceeding ``soft_threshold`` records a warning on the report every time
+	(so a UI box can show it) but only *logs* it once per distinct
+	expression. If ``max_hops`` is set and exceeded, raises instead.
 
-    Raises:
-        ComprehensionDepthError: if ``max_hops`` is set and exceeded.
-    """
-    report = analyse_expression(expr)
-    if max_hops is not None and report.max_hop > max_hops:
-        raise ComprehensionDepthError(
-            f"Expression nests {report.max_hop} hops beyond 'neighbors'; "
-            f"the configured maximum is {max_hops}."
-        )
-    if report.max_hop > soft_threshold:
-        message = (
-            f"Expression nests {report.max_hop} hops beyond 'neighbors' "
-            f"(soft limit {soft_threshold}); cost grows roughly with "
-            f"degree^{report.max_hop + 1}."
-        )
-        key = (expr, soft_threshold)
-        if key not in _warned:
-            _warned.add(key)
-            logger.warning(message)
-        return ComprehensionReport(
-            report.uses_neighbors, report.has_comprehension, report.max_hop, (message,)
-        )
-    return report
+	Raises:
+	    ComprehensionDepthError: if ``max_hops`` is set and exceeded.
+	"""
+	report = analyse_expression(expr)
+	if max_hops is not None and report.max_hop > max_hops:
+		raise ComprehensionDepthError(
+			f"Expression nests {report.max_hop} hops beyond 'neighbors'; the configured maximum is {max_hops}."
+		)
+	if report.max_hop > soft_threshold:
+		message = (
+			f"Expression nests {report.max_hop} hops beyond 'neighbors' "
+			f'(soft limit {soft_threshold}); cost grows roughly with '
+			f'degree^{report.max_hop + 1}.'
+		)
+		key = (expr, soft_threshold)
+		if key not in _warned:
+			_warned.add(key)
+			logger.warning(message)
+		return ComprehensionReport(report.uses_neighbors, report.has_comprehension, report.max_hop, (message,))
+	return report
 
 
 class AgentView(dict):
-    """Dict snapshot of an agent's state with a lazy neighbour key.
+	"""Dict snapshot of an agent's state with a lazy neighbour key.
 
-    The neighbour list is only built (and size-checked) if the expression
-    actually subscripts ``['neighbors']`` or ``['neighbours']``, so one-hop
-    queries never pay for deeper hops. If an agent has a real attribute with
-    one of those names it takes precedence over the lazy one.
-    """
+	The neighbour list is only built (and size-checked) if the expression
+	actually subscripts ``['neighbors']`` or ``['neighbours']``, so one-hop
+	queries never pay for deeper hops. If an agent has a real attribute with
+	one of those names it takes precedence over the lazy one.
+	"""
 
-    def __init__(
-        self, state: Mapping[str, Any], load_neighbors: Callable[[], list["AgentView"]]
-    ) -> None:
-        super().__init__(state)  # shallow copy: expression can't rebind state keys
-        self._load_neighbors = load_neighbors
+	def __init__(self, state: Mapping[str, Any], load_neighbors: Callable[[], list['AgentView']]) -> None:
+		super().__init__(state)  # shallow copy: expression can't rebind state keys
+		self._load_neighbors = load_neighbors
 
-    def __missing__(self, key: str) -> Any:
-        """Lazily build the neighbour list for either spelling of the key."""
-        if key in NEIGHBORS_NAMES:
-            value = self._load_neighbors()
-            self[key] = value
-            return value
-        raise KeyError(key)
+	def __missing__(self, key: str) -> Any:
+		"""Lazily build the neighbour list for either spelling of the key."""
+		if key in NEIGHBORS_NAMES:
+			value = self._load_neighbors()
+			self[key] = value
+			return value
+		raise KeyError(key)
 
 
 def enable_comprehensions(evaluator: EvalWithCompoundTypes) -> EvalWithCompoundTypes:
-    """Whitelist ListComp, GeneratorExp and SetComp on ``evaluator``.
+	"""Whitelist ListComp, GeneratorExp and SetComp on ``evaluator``.
 
-    A no-op for node types simpleeval already handles in your version.
+	A no-op for node types simpleeval already handles in your version.
 
-    Raises:
-        RuntimeError: if the installed simpleeval has no comprehension handler.
-    """
-    handler = getattr(evaluator, "_eval_comprehension", None)
-    for node_type in COMPREHENSION_NODES:
-        if node_type not in evaluator.nodes:
-            if handler is None:
-                raise RuntimeError(
-                    "Installed simpleeval has no comprehension support; "
-                    "check the pinned version."
-                )
-            evaluator.nodes[node_type] = handler
-    return evaluator
+	Raises:
+	    RuntimeError: if the installed simpleeval has no comprehension handler.
+	"""
+	handler = getattr(evaluator, '_eval_comprehension', None)
+	for node_type in COMPREHENSION_NODES:
+		if node_type not in evaluator.nodes:
+			if handler is None:
+				raise RuntimeError('Installed simpleeval has no comprehension support; check the pinned version.')
+			evaluator.nodes[node_type] = handler
+	return evaluator
 
 
 def build_views_from_ids(
-    neighbour_ids: Iterable[str],
-    population: Mapping[str, Any],
-    neighbours_of: Callable[[str], Iterable[str]],
-    *,
-    max_neighbors: int = DEFAULT_MAX_NEIGHBORS,
+	neighbour_ids: Iterable[str],
+	population: Mapping[str, Any],
+	neighbours_of: Callable[[str], Iterable[str]],
+	*,
+	max_neighbors: int = DEFAULT_MAX_NEIGHBORS,
 ) -> list[AgentView]:
-    """Wrap known neighbour IDs as AgentViews with lazy deeper hops.
+	"""Wrap known neighbour IDs as AgentViews with lazy deeper hops.
 
-    Args:
-        neighbour_ids: IDs of the focal agent's neighbours (hop 0; the
-            caller or ``_safe_eval`` enforces the cap on this level).
-        population: Mapping of agent_id -> object with a ``.state`` dict.
-            Pass the t-1 snapshot so deeper hops respect the same
-            guarantee as hop 0.
-        neighbours_of: Returns neighbour IDs for any agent ID.
-        max_neighbors: Cap applied to every deeper neighbour set.
+	Args:
+	    neighbour_ids: IDs of the focal agent's neighbours (hop 0; the
+	        caller or ``_safe_eval`` enforces the cap on this level).
+	    population: Mapping of agent_id -> object with a ``.state`` dict.
+	        Pass the t-1 snapshot so deeper hops respect the same
+	        guarantee as hop 0.
+	    neighbours_of: Returns neighbour IDs for any agent ID.
+	    max_neighbors: Cap applied to every deeper neighbour set.
 
-    Raises:
-        NeighborSetTooLargeError: lazily, if a deeper hop exceeds the cap.
-    """
+	Raises:
+	    NeighborSetTooLargeError: lazily, if a deeper hop exceeds the cap.
+	"""
 
-    def views_for(aid: str) -> list[AgentView]:
-        ids = [i for i in neighbours_of(aid) if i in population]
-        if len(ids) > max_neighbors:
-            raise NeighborSetTooLargeError(
-                f"Agent {aid!r} has {len(ids)} neighbours; comprehensions are "
-                f"capped at {max_neighbors}. Raise sandbox.max_neighbours or "
-                f"use a helper such as neighbor_count(...)."
-            )
-        return [make_view(i) for i in ids]
+	def views_for(aid: str) -> list[AgentView]:
+		ids = [i for i in neighbours_of(aid) if i in population]
+		if len(ids) > max_neighbors:
+			raise NeighborSetTooLargeError(
+				f'Agent {aid!r} has {len(ids)} neighbours; comprehensions are '
+				f'capped at {max_neighbors}. Raise sandbox.max_neighbours or '
+				f'use a helper such as neighbor_count(...).'
+			)
+		return [make_view(i) for i in ids]
 
-    def make_view(aid: str) -> AgentView:
-        return AgentView(population[aid].state, lambda: views_for(aid))
+	def make_view(aid: str) -> AgentView:
+		return AgentView(population[aid].state, lambda: views_for(aid))
 
-    return [make_view(i) for i in neighbour_ids if i in population]
+	return [make_view(i) for i in neighbour_ids if i in population]
 
 
 def build_views_from_states(
-    neighbours: Iterable[Any],
-    neighbours_of: Callable[[str], Iterable[Any]],
-    *,
-    max_neighbors: int = DEFAULT_MAX_NEIGHBORS,
+	neighbours: Iterable[Any],
+	neighbours_of: Callable[[str], Iterable[Any]],
+	*,
+	max_neighbors: int = DEFAULT_MAX_NEIGHBORS,
 ) -> list[AgentView]:
-    """Wrap AgentState-like neighbours as AgentViews with lazy deeper hops.
+	"""Wrap AgentState-like neighbours as AgentViews with lazy deeper hops.
 
-    Args:
-        neighbours: Hop-0 neighbours, objects with ``.agent_id`` and
-            ``.state`` (the caller or ``_safe_eval`` caps this level).
-        neighbours_of: Returns neighbour objects for any agent id.
-        max_neighbors: Cap applied to every deeper neighbour set.
+	Args:
+	    neighbours: Hop-0 neighbours, objects with ``.agent_id`` and
+	        ``.state`` (the caller or ``_safe_eval`` caps this level).
+	    neighbours_of: Returns neighbour objects for any agent id.
+	    max_neighbors: Cap applied to every deeper neighbour set.
 
-    Raises:
-        NeighborSetTooLargeError: lazily, if a deeper hop exceeds the cap.
-    """
+	Raises:
+	    NeighborSetTooLargeError: lazily, if a deeper hop exceeds the cap.
+	"""
 
-    def make_view(agent: Any) -> AgentView:
-        return AgentView(agent.state, lambda: views_for(agent.agent_id))
+	def make_view(agent: Any) -> AgentView:
+		return AgentView(agent.state, lambda: views_for(agent.agent_id))
 
-    def views_for(aid: str) -> list[AgentView]:
-        found = list(neighbours_of(aid))
-        if len(found) > max_neighbors:
-            raise NeighborSetTooLargeError(
-                f"Agent {aid!r} has {len(found)} neighbours; comprehensions are "
-                f"capped at {max_neighbors}. Raise sandbox.max_neighbours or "
-                f"use a helper such as neighbor_count(...)."
-            )
-        return [make_view(a) for a in found]
+	def views_for(aid: str) -> list[AgentView]:
+		found = list(neighbours_of(aid))
+		if len(found) > max_neighbors:
+			raise NeighborSetTooLargeError(
+				f'Agent {aid!r} has {len(found)} neighbours; comprehensions are '
+				f'capped at {max_neighbors}. Raise sandbox.max_neighbours or '
+				f'use a helper such as neighbor_count(...).'
+			)
+		return [make_view(a) for a in found]
 
-    return [make_view(a) for a in neighbours]
+	return [make_view(a) for a in neighbours]

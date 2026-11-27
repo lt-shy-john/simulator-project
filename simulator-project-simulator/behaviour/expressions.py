@@ -51,17 +51,22 @@ import ast
 from functools import lru_cache
 from simpleeval import EvalWithCompoundTypes, InvalidExpression
 
-from behaviour.expression_steps import NEIGHBOUR_HELPERS, AssignmentStep, ConditionalRule, RuleStep
+from behaviour.expression_steps import (
+	NEIGHBOUR_HELPERS,
+	AssignmentStep,
+	ConditionalRule,
+	RuleStep,
+)
 from behaviour.neighbour_helpers import make_neighbour_helpers
 from behaviour.expression_comprehensions import (
-    NEIGHBORS_NAMES,
-    AgentView,
-    SandboxConfig,
-    analyse_expression,
-    check_comprehension_policy,
-    check_neighbour_cap,
-    enable_comprehensions,
-    build_views_from_states,
+	NEIGHBORS_NAMES,
+	AgentView,
+	SandboxConfig,
+	analyse_expression,
+	check_comprehension_policy,
+	check_neighbour_cap,
+	enable_comprehensions,
+	build_views_from_states,
 )
 from behaviour.expression_distributions import build_distribution_functions
 from runner.state import AgentState
@@ -75,30 +80,28 @@ from runner.state import AgentState
 # neighbor_mean, ...) are passed in per call via `extra_functions`, because
 # they are bound to the current step's snapshot.
 _SAFE_FUNCTIONS = {
-    "any": any,
-    "all": all,
-    "sum": sum,
-    "len": len,
-    "min": min,
-    "max": max,
-    "abs": abs,
-    "round": round,
+	'any': any,
+	'all': all,
+	'sum': sum,
+	'len': len,
+	'min': min,
+	'max': max,
+	'abs': abs,
+	'round': round,
 }
 
 
 # Matches: state["key"] OP rest_of_expression
 # OP is one of: =, +=, -=, *=, /=
 # Captures: key (quoted string), operator, rhs (everything after operator)
-_ASSIGNMENT_PATTERN = re.compile(
-    r'^\s*state\[(["\'])(?P<key>\w+)\1\]\s*(?P<op>=|\+=|-=|\*=|/=)\s*(?P<rhs>.+)$'
-)
+_ASSIGNMENT_PATTERN = re.compile(r'^\s*state\[(["\'])(?P<key>\w+)\1\]\s*(?P<op>=|\+=|-=|\*=|/=)\s*(?P<rhs>.+)$')
 
 _SUPPORTED_OPS = {
-    "=": lambda current, rhs: rhs,
-    "+=": lambda current, rhs: current + rhs,
-    "-=": lambda current, rhs: current - rhs,
-    "*=": lambda current, rhs: current * rhs,
-    "/=": lambda current, rhs: current / rhs,
+	'=': lambda current, rhs: rhs,
+	'+=': lambda current, rhs: current + rhs,
+	'-=': lambda current, rhs: current - rhs,
+	'*=': lambda current, rhs: current * rhs,
+	'/=': lambda current, rhs: current / rhs,
 }
 
 # Returns the start-of-step neighbour snapshots for a topology.
@@ -106,264 +109,265 @@ NeighboursFor = Callable[[str | None], list[AgentState]]
 
 
 def _safe_eval(
-    expression: str,
-    agent: AgentState,
-    neighbours_state: list[dict[str, Any]],
-    extra_functions: dict[str, Callable[..., Any]] | None = None,
-    display: str | None = None,
-    sandbox: SandboxConfig | None = None,
-    rng: Generator | None = None,   # new
+	expression: str,
+	agent: AgentState,
+	neighbours_state: list[dict[str, Any]],
+	extra_functions: dict[str, Callable[..., Any]] | None = None,
+	display: str | None = None,
+	sandbox: SandboxConfig | None = None,
+	rng: Generator | None = None,  # new
 ) -> Any:
-    """Evaluate one pure expression with simpleeval and return its value.
+	"""Evaluate one pure expression with simpleeval and return its value.
 
-    Args:
-        expression: the expression to evaluate, e.g. 'state["age"] + 1'.
-        agent: supplies `state` (a fresh copy, so expressions can't mutate it).
-        neighbours_state: read-only list of neighbour state dicts (t-1).
-            Entries may be AgentViews, which allow ``n['neighbours']``.
-        extra_functions: additional whitelisted callables, e.g. the
-            snapshot-bound neighbour helpers from Ticket 3.
-        display: text used in error messages (defaults to `expression`);
-            lets the legacy path keep reporting the full original string.
-        sandbox: comprehension limits; defaults to ``SandboxConfig()``.
-        rng: the simulation's central generator. When given, the
-            distribution helpers (random, normal, binomial, poisson) are
-            available to the expression. Unseeded calls draw from it;
-            seeded calls ignore it. When None, the helpers are not
-            defined and using one raises ValueError.
+	Args:
+	    expression: the expression to evaluate, e.g. 'state["age"] + 1'.
+	    agent: supplies `state` (a fresh copy, so expressions can't mutate it).
+	    neighbours_state: read-only list of neighbour state dicts (t-1).
+	        Entries may be AgentViews, which allow ``n['neighbours']``.
+	    extra_functions: additional whitelisted callables, e.g. the
+	        snapshot-bound neighbour helpers from Ticket 3.
+	    display: text used in error messages (defaults to `expression`);
+	        lets the legacy path keep reporting the full original string.
+	    sandbox: comprehension limits; defaults to ``SandboxConfig()``.
+	    rng: the simulation's central generator. When given, the
+	        distribution helpers (random, normal, binomial, poisson) are
+	        available to the expression. Unseeded calls draw from it;
+	        seeded calls ignore it. When None, the helpers are not
+	        defined and using one raises ValueError.
 
-    Raises:
-        ValueError: on any unsafe, undefined or syntactically invalid
-            expression, a comprehension over too many neighbours, or a
-            configured hard hop cap being exceeded, so callers never see
-            simpleeval's own exceptions.
-    """
-    shown = display if display is not None else expression
-    sandbox = sandbox or SandboxConfig()
+	Raises:
+	    ValueError: on any unsafe, undefined or syntactically invalid
+	        expression, a comprehension over too many neighbours, or a
+	        configured hard hop cap being exceeded, so callers never see
+	        simpleeval's own exceptions.
+	"""
+	shown = display if display is not None else expression
+	sandbox = sandbox or SandboxConfig()
 
-    report = check_comprehension_policy(
-        expression,
-        soft_threshold=sandbox.soft_hop_threshold,
-        max_hops=sandbox.max_hops,
-    )
-    if report.has_comprehension and neighbours_state is not None:
-        check_neighbour_cap(
-            neighbours_state,
-            sandbox.max_neighbours,
-            agent_id=getattr(agent, "agent_id", None),
-        )
+	report = check_comprehension_policy(
+		expression,
+		soft_threshold=sandbox.soft_hop_threshold,
+		max_hops=sandbox.max_hops,
+	)
+	if report.has_comprehension and neighbours_state is not None:
+		check_neighbour_cap(
+			neighbours_state,
+			sandbox.max_neighbours,
+			agent_id=getattr(agent, 'agent_id', None),
+		)
 
-    context = {
-        "state": dict(agent.state),
-        **{alias: neighbours_state for alias in NEIGHBORS_NAMES},
-    }
-    functions = {**_SAFE_FUNCTIONS, **(extra_functions or {})}
-    if rng is not None:
-        functions.update(build_distribution_functions(rng))
+	context = {
+		'state': dict(agent.state),
+		**{alias: neighbours_state for alias in NEIGHBORS_NAMES},
+	}
+	functions = {**_SAFE_FUNCTIONS, **(extra_functions or {})}
+	if rng is not None:
+		functions.update(build_distribution_functions(rng))
 
-    try:
-        evaluator = enable_comprehensions(
-            EvalWithCompoundTypes(names=context, functions=functions)
-        )
-        return evaluator.eval(expression)
-    except InvalidExpression as e:
-        raise ValueError(f"Expression '{shown}' failed to evaluate safely: {e}") from e
-    except (SyntaxError, NameError) as e:
-        raise ValueError(f"Expression '{shown}' failed to evaluate: {e}") from e
+	try:
+		evaluator = enable_comprehensions(EvalWithCompoundTypes(names=context, functions=functions))
+		return evaluator.eval(expression)
+	except InvalidExpression as e:
+		raise ValueError(f"Expression '{shown}' failed to evaluate safely: {e}") from e
+	except (SyntaxError, NameError) as e:
+		raise ValueError(f"Expression '{shown}' failed to evaluate: {e}") from e
 
 
 def _neighbour_views(
-    expression: str,
-    neighbour_agents: list[AgentState],
-    topology_name: str | None,
-    neighbours_for: NeighboursFor,
-    sandbox: SandboxConfig | None,
+	expression: str,
+	neighbour_agents: list[AgentState],
+	topology_name: str | None,
+	neighbours_for: NeighboursFor,
+	sandbox: SandboxConfig | None,
 ) -> list[dict[str, Any]]:
-    """Neighbour state dicts for one step, with lazy deeper hops if needed.
+	"""Neighbour state dicts for one step, with lazy deeper hops if needed.
 
-    Plain state dicts are returned unless the expression reaches beyond the
-    first hop (``n['neighbours']`` inside a comprehension), in which case
-    each neighbour becomes an AgentView.
+	Plain state dicts are returned unless the expression reaches beyond the
+	first hop (``n['neighbours']`` inside a comprehension), in which case
+	each neighbour becomes an AgentView.
 
-    Args:
-        expression: the expression about to be evaluated.
-        neighbour_agents: the focal agent's neighbours (hop 0).
-        topology_name: the step's topology, used for deeper-hop lookups.
-        neighbours_for: the per-agent lookup from the executor.
-        sandbox: comprehension limits; defaults to ``SandboxConfig()``.
-    """
-    if analyse_expression(expression).max_hop < 1:
-        return [a.state for a in neighbour_agents]
-    limits = sandbox or SandboxConfig()
-    return build_views_from_states(
-        neighbour_agents,
-        lambda aid: neighbours_for(topology_name, aid),
-        max_neighbors=limits.max_neighbours,
-    )
+	Args:
+	    expression: the expression about to be evaluated.
+	    neighbour_agents: the focal agent's neighbours (hop 0).
+	    topology_name: the step's topology, used for deeper-hop lookups.
+	    neighbours_for: the per-agent lookup from the executor.
+	    sandbox: comprehension limits; defaults to ``SandboxConfig()``.
+	"""
+	if analyse_expression(expression).max_hop < 1:
+		return [a.state for a in neighbour_agents]
+	limits = sandbox or SandboxConfig()
+	return build_views_from_states(
+		neighbour_agents,
+		lambda aid: neighbours_for(topology_name, aid),
+		max_neighbors=limits.max_neighbours,
+	)
 
 
 def evaluate_expression(
-    expr: str,
-    agent: AgentState,
-    neighbours_state: list[dict[str, Any]],
-    sandbox: SandboxConfig | None = None,
-    rng: Generator | None = None,
+	expr: str,
+	agent: AgentState,
+	neighbours_state: list[dict[str, Any]],
+	sandbox: SandboxConfig | None = None,
+	rng: Generator | None = None,
 ) -> None:
-    """Parse and execute one assignment-style expression against agent.state.
+	"""Parse and execute one assignment-style expression against agent.state.
 
-    Legacy single-string form. Mutates agent.state in place. Always a
-    self-write — expressions cannot target neighbour state (see module
-    docstring). Reading neighbour state is allowed via the `neighbours`
-    name inside the expression.
+	Legacy single-string form. Mutates agent.state in place. Always a
+	self-write — expressions cannot target neighbour state (see module
+	docstring). Reading neighbour state is allowed via the `neighbours`
+	name inside the expression.
 
-    Args:
-        expr: the expression string, e.g. 'state["energy"] -= 1' or
-              'state["infected"] = any(n["infected"] for n in neighbours)'
-        agent: the AgentState being mutated
-        neighbours_state: read-only list of dicts, one per neighbour,
-            each containing that neighbour's state as of the start of
-            this step. Precomputed by the executor before calling this
-            function — same t-1 guarantee as NeighbourAccessor.read().
-        sandbox: comprehension limits (neighbour cap, hop warning
-            threshold); defaults to ``SandboxConfig()``.
-        rng: the simulation's central generator. When given, the
-            distribution helpers (random, normal, binomial, poisson) are
-            available to the expression.
+	Args:
+	    expr: the expression string, e.g. 'state["energy"] -= 1' or
+	          'state["infected"] = any(n["infected"] for n in neighbours)'
+	    agent: the AgentState being mutated
+	    neighbours_state: read-only list of dicts, one per neighbour,
+	        each containing that neighbour's state as of the start of
+	        this step. Precomputed by the executor before calling this
+	        function — same t-1 guarantee as NeighbourAccessor.read().
+	    sandbox: comprehension limits (neighbour cap, hop warning
+	        threshold); defaults to ``SandboxConfig()``.
+	    rng: the simulation's central generator. When given, the
+	        distribution helpers (random, normal, binomial, poisson) are
+	        available to the expression.
 
-    Raises:
-        ValueError: if expr doesn't match the required
-            'state["key"] OP expression' shape, or if the rhs expression
-            fails to evaluate safely (undefined names, disallowed
-            operations, syntax errors), or a comprehension exceeding
-            the neighbour cap or a configured hard hop cap (both are
-            ValueError subclasses).
-        KeyError: if the target key is not a defined attribute on agent
-            (raised by AgentState.get/set — see runner/state.py). This
-            applies to '=' as well, consistent with S-02's design that new
-            attributes cannot be added to an agent's state at runtime.
-    """
-    match = _ASSIGNMENT_PATTERN.match(expr)
-    if not match:
-        raise ValueError(...)  # unchanged
+	Raises:
+	    ValueError: if expr doesn't match the required
+	        'state["key"] OP expression' shape, or if the rhs expression
+	        fails to evaluate safely (undefined names, disallowed
+	        operations, syntax errors), or a comprehension exceeding
+	        the neighbour cap or a configured hard hop cap (both are
+	        ValueError subclasses).
+	    KeyError: if the target key is not a defined attribute on agent
+	        (raised by AgentState.get/set — see runner/state.py). This
+	        applies to '=' as well, consistent with S-02's design that new
+	        attributes cannot be added to an agent's state at runtime.
+	"""
+	match = _ASSIGNMENT_PATTERN.match(expr)
+	if not match:
+		raise ValueError(...)  # unchanged
 
-    sandbox = sandbox or SandboxConfig()
-    key = match.group("key")
-    op = match.group("op")
-    rhs_value = _safe_eval(
-        match.group("rhs"), agent, neighbours_state,
-        display=expr, sandbox=sandbox, rng=rng,
-    )
+	sandbox = sandbox or SandboxConfig()
+	key = match.group('key')
+	op = match.group('op')
+	rhs_value = _safe_eval(
+		match.group('rhs'),
+		agent,
+		neighbours_state,
+		display=expr,
+		sandbox=sandbox,
+		rng=rng,
+	)
 
-    current_value = agent.get(key) if op != "=" else None
-    try:
-        new_value = _SUPPORTED_OPS[op](current_value, rhs_value)
-    except (ZeroDivisionError, TypeError) as e:
-        raise ValueError(f"Expression '{expr}' failed to apply: {e}") from e
-    agent.set(key, new_value)
+	current_value = agent.get(key) if op != '=' else None
+	try:
+		new_value = _SUPPORTED_OPS[op](current_value, rhs_value)
+	except (ZeroDivisionError, TypeError) as e:
+		raise ValueError(f"Expression '{expr}' failed to apply: {e}") from e
+	agent.set(key, new_value)
 
 
 def evaluate_step(
-    step: AssignmentStep,
-    agent: AgentState,
-    neighbours_for: NeighboursFor,
-    sandbox: SandboxConfig | None = None,
-    rng: Generator | None = None,
+	step: AssignmentStep,
+	agent: AgentState,
+	neighbours_for: NeighboursFor,
+	sandbox: SandboxConfig | None = None,
+	rng: Generator | None = None,
 ) -> None:
-    """Evaluate one plain step and write the result to agent.state[field].
+	"""Evaluate one plain step and write the result to agent.state[field].
 
-    Args:
-        step: the validated AssignmentStep.
-        agent: the AgentState being mutated.
-        neighbours_for: resolves topology_name to neighbour AgentState
-            snapshots (start-of-step).
-        sandbox: comprehension limits; defaults to ``SandboxConfig()``.
-        rng: the simulation's central generator. When given, the
-            distribution helpers (random, normal, binomial, poisson) are
-            available to the expression.
+	Args:
+	    step: the validated AssignmentStep.
+	    agent: the AgentState being mutated.
+	    neighbours_for: resolves topology_name to neighbour AgentState
+	        snapshots (start-of-step).
+	    sandbox: comprehension limits; defaults to ``SandboxConfig()``.
+	    rng: the simulation's central generator. When given, the
+	        distribution helpers (random, normal, binomial, poisson) are
+	        available to the expression.
 
-    Raises:
-        ValueError: if the expression fails to evaluate safely.
-        KeyError: if step.field is not defined on the agent.
-    """
-    neighbour_agents = neighbours_for(step.topology_name)
-    value = _safe_eval(
-        step.expression,
-        agent,
-        _neighbour_views(
-            step.expression, neighbour_agents, step.topology_name,
-            neighbours_for, sandbox,
-        ),
-        make_neighbour_helpers(neighbour_agents),
-        sandbox=sandbox,
-        rng=rng,
-    )
-    agent.set(step.field, value)
+	Raises:
+	    ValueError: if the expression fails to evaluate safely.
+	    KeyError: if step.field is not defined on the agent.
+	"""
+	neighbour_agents = neighbours_for(step.topology_name)
+	value = _safe_eval(
+		step.expression,
+		agent,
+		_neighbour_views(
+			step.expression,
+			neighbour_agents,
+			step.topology_name,
+			neighbours_for,
+			sandbox,
+		),
+		make_neighbour_helpers(neighbour_agents),
+		sandbox=sandbox,
+		rng=rng,
+	)
+	agent.set(step.field, value)
 
 
 @lru_cache(maxsize=1024)
 def _uses_neighbours(expression: str) -> bool:
-    """True if the expression calls a neighbour helper or reads `neighbours`.
+	"""True if the expression calls a neighbour helper or reads `neighbours`.
 
-    Cached, so conditions that only read own state skip building the
-    neighbour list (which is O(N) under AllPairs).
-    """
-    return any(
-        (
-            isinstance(n, ast.Call)
-            and isinstance(n.func, ast.Name)
-            and n.func.id in NEIGHBOUR_HELPERS
-        )
-        or (isinstance(n, ast.Name) and n.id in NEIGHBORS_NAMES)
-        for n in ast.walk(ast.parse(expression, mode="eval"))
-    )
+	Cached, so conditions that only read own state skip building the
+	neighbour list (which is O(N) under AllPairs).
+	"""
+	return any(
+		(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in NEIGHBOUR_HELPERS)
+		or (isinstance(n, ast.Name) and n.id in NEIGHBORS_NAMES)
+		for n in ast.walk(ast.parse(expression, mode='eval'))
+	)
 
 
 def run_rule_steps(
-    steps: list[RuleStep],
-    agent: AgentState,
-    neighbours_for: NeighboursFor,
-    sandbox: SandboxConfig | None = None,
-    rng: Generator | None = None,
+	steps: list[RuleStep],
+	agent: AgentState,
+	neighbours_for: NeighboursFor,
+	sandbox: SandboxConfig | None = None,
+	rng: Generator | None = None,
 ) -> None:
-    """Run a rule's steps in order against one agent.
+	"""Run a rule's steps in order against one agent.
 
-    Conditions are evaluated at the point they are reached, so they see
-    writes made by earlier steps. Conditions may call the neighbour
-    helpers; they resolve neighbours through the conditional's own
-    topology_name. Iterative, so nesting depth has no hard cap.
+	Conditions are evaluated at the point they are reached, so they see
+	writes made by earlier steps. Conditions may call the neighbour
+	helpers; they resolve neighbours through the conditional's own
+	topology_name. Iterative, so nesting depth has no hard cap.
 
-    Args:
-        steps: AssignmentStep / ConditionalRule list from build_rule_steps.
-        agent: the AgentState being mutated.
-        neighbours_for: resolves topology_name to start-of-step neighbour
-            AgentState snapshots.
-        sandbox: comprehension limits (neighbour cap, hop warning
-            threshold); defaults to ``SandboxConfig()``.
-        rng: the simulation's central generator, forwarded to every
-            condition and assignment so the distribution helpers work in
-            if-conditions and in then/else blocks.
-    """
-    from behaviour.condition import _evaluate_condition  # lazy, as in S-10
+	Args:
+	    steps: AssignmentStep / ConditionalRule list from build_rule_steps.
+	    agent: the AgentState being mutated.
+	    neighbours_for: resolves topology_name to start-of-step neighbour
+	        AgentState snapshots.
+	    sandbox: comprehension limits (neighbour cap, hop warning
+	        threshold); defaults to ``SandboxConfig()``.
+	    rng: the simulation's central generator, forwarded to every
+	        condition and assignment so the distribution helpers work in
+	        if-conditions and in then/else blocks.
+	"""
+	from behaviour.condition import _evaluate_condition  # lazy, as in S-10
 
-    stack = [iter(steps)]
-    while stack:
-        step = next(stack[-1], None)
-        if step is None:
-            stack.pop()
-        elif isinstance(step, ConditionalRule):
-            if _uses_neighbours(step.condition):
-                neighbour_agents = neighbours_for(step.topology_name)
-                taken = _evaluate_condition(
-                    step.condition,
-                    agent,
-                    neighbour_agents,
-                    make_neighbour_helpers(neighbour_agents),
-                    sandbox=sandbox,
-                    neighbours_of=lambda aid, name=step.topology_name: neighbours_for(name, aid),
-                    rng=rng,  # new
-                )
-            else:
-                taken = _evaluate_condition(step.condition, agent, rng=rng)  # new
-            stack.append(iter(step.then if taken else step.else_))
-        else:
-            evaluate_step(step, agent, neighbours_for, sandbox=sandbox, rng=rng)  # new
+	stack = [iter(steps)]
+	while stack:
+		step = next(stack[-1], None)
+		if step is None:
+			stack.pop()
+		elif isinstance(step, ConditionalRule):
+			if _uses_neighbours(step.condition):
+				neighbour_agents = neighbours_for(step.topology_name)
+				taken = _evaluate_condition(
+					step.condition,
+					agent,
+					neighbour_agents,
+					make_neighbour_helpers(neighbour_agents),
+					sandbox=sandbox,
+					neighbours_of=lambda aid, name=step.topology_name: neighbours_for(name, aid),
+					rng=rng,  # new
+				)
+			else:
+				taken = _evaluate_condition(step.condition, agent, rng=rng)  # new
+			stack.append(iter(step.then if taken else step.else_))
+		else:
+			evaluate_step(step, agent, neighbours_for, sandbox=sandbox, rng=rng)  # new

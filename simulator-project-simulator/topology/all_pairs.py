@@ -42,78 +42,80 @@ from topology.topology import validate_agent_types
 
 
 class AllPairsTopology:
-    """Topology implementation that returns all other agents as neighbours.
+	"""Topology implementation that returns all other agents as neighbours.
 
-    Satisfies TopologyProtocol structurally — no inheritance needed.
-    """
+	Satisfies TopologyProtocol structurally — no inheritance needed.
+	"""
 
-    def __init__(
-        self,
-        allow_self_interaction: bool = False,
-        agent_types: list[str] | None = None,
-    ):
-        """
-        Args:
-            allow_self_interaction: if True, agent appears in its own
-                neighbour list. Default False.
-            agent_types: if set, only agents of these types are returned
-                as neighbours. If None, all types are included.
-        """
-        self.allow_self_interaction = allow_self_interaction
-        self.agent_types = agent_types
+	def __init__(
+		self,
+		allow_self_interaction: bool = False,
+		agent_types: list[str] | None = None,
+	):
+		"""
+		Args:
+		    allow_self_interaction: if True, agent appears in its own
+		        neighbour list. Default False.
+		    agent_types: if set, only agents of these types are returned
+		        as neighbours. If None, all types are included.
+		"""
+		self.allow_self_interaction = allow_self_interaction
+		self.agent_types = agent_types
 
-    @classmethod
-    def from_config(cls, config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None) -> "AllPairsTopology":
-        """Construct from a topology config section.
+	@classmethod
+	def from_config(
+		cls, config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None
+	) -> 'AllPairsTopology':
+		"""Construct from a topology config section.
 
-        Args:
-            config: the config dict for this topology, e.g.
-                {
-                    "mode": "all_pairs",
-                    "agent_types": ["predator", "prey"]
-                }
-            soa: the current SoAPopulation, used to validate agent_types
-                 refers to real agent types present in the population
-            rng: shared seeded generator, forwarded by build_topologies fo
-                 signature consistency with TopologyProtocol. Unused here —
-                 an all-pairs topology has no randomness to seed.
+		Args:
+		    config: the config dict for this topology, e.g.
+		        {
+		            "mode": "all_pairs",
+		            "agent_types": ["predator", "prey"]
+		        }
+		    soa: the current SoAPopulation, used to validate agent_types
+		         refers to real agent types present in the population
+		    rng: shared seeded generator, forwarded by build_topologies fo
+		         signature consistency with TopologyProtocol. Unused here —
+		         an all-pairs topology has no randomness to seed.
 
-        Raises:
-            ValueError: if agent_types contains a type not present in soa
-        """
-        agent_types = config.get("agent_types", None)
-        validate_agent_types(agent_types, soa)
+		Raises:
+		    ValueError: if agent_types contains a type not present in soa
+		"""
+		agent_types = config.get('agent_types', None)
+		validate_agent_types(agent_types, soa)
 
-        return cls(
-            allow_self_interaction=config.get("allow_self_interaction", False),
-            agent_types=agent_types,
-        )
+		return cls(
+			allow_self_interaction=config.get('allow_self_interaction', False),
+			agent_types=agent_types,
+		)
 
-    def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:
-        """Return all agent IDs in the population except self (by default).
+	def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:
+		"""Return all agent IDs in the population except self (by default).
 
-        Iterates over all agent types in the SoA, collecting IDs from
-        each type's __ids__ array. Filters by agent_types if specified.
+		Iterates over all agent types in the SoA, collecting IDs from
+		each type's __ids__ array. Filters by agent_types if specified.
 
-        Args:
-            agent_id: the ID of the focal agent
-            soa: the current SoAPopulation
+		Args:
+		    agent_id: the ID of the focal agent
+		    soa: the current SoAPopulation
 
-        Returns:
-            list of neighbour agent ID strings
-        """
-        neighbours: list[str] = []
+		Returns:
+		    list of neighbour agent ID strings
+		"""
+		neighbours: list[str] = []
 
-        for type_name, arrays in soa.items():
-            # Filter by agent_types if specified
-            if self.agent_types is not None and type_name not in self.agent_types:
-                continue
+		for type_name, arrays in soa.items():
+			# Filter by agent_types if specified
+			if self.agent_types is not None and type_name not in self.agent_types:
+				continue
 
-            for id_ in arrays[ID_KEY]:
-                id_str = str(id_)
-                # Exclude self unless allow_self_interaction is True
-                if not self.allow_self_interaction and id_str == agent_id:
-                    continue
-                neighbours.append(id_str)
+			for id_ in arrays[ID_KEY]:
+				id_str = str(id_)
+				# Exclude self unless allow_self_interaction is True
+				if not self.allow_self_interaction and id_str == agent_id:
+					continue
+				neighbours.append(id_str)
 
-        return neighbours
+		return neighbours

@@ -36,245 +36,257 @@ import numpy as np
 
 from runner.state import AgentState
 
-logger = logging.getLogger("simulator")
+logger = logging.getLogger('simulator')
 
 
 @runtime_checkable
 class Model(Protocol):
-    """Structural interface for the simulation context object.
+	"""Structural interface for the simulation context object.
 
-    Passed to every BehaviourModule.apply() call as the `model` argument.
-    """
+	Passed to every BehaviourModule.apply() call as the `model` argument.
+	"""
 
-    step: int
-    """Current step number. Also the mechanism a module uses to implement
+	step: int
+	"""Current step number. Also the mechanism a module uses to implement
     external_entry's "configurable step interval" itself — e.g.
     `if model.step % 10 == 0: model.external_entry(...)`. There is no
     separate interval-checking mechanism; the module author checks
     model.step directly."""
 
-    agents: list[AgentState]
-    """The full population, all agent types combined."""
+	agents: list[AgentState]
+	"""The full population, all agent types combined."""
 
-    params: dict[str, Any]
-    """Global, read-only parameters from SimulationConfig.params (S-11).
+	params: dict[str, Any]
+	"""Global, read-only parameters from SimulationConfig.params (S-11).
     Shape is entirely researcher-defined — a module reads whatever keys
     it expects; empty dict if the config didn't set any."""
 
-    rng: np.random.Generator
-    """Shared random number generator, seeded from SimulationConfig.seed
+	rng: np.random.Generator
+	"""Shared random number generator, seeded from SimulationConfig.seed
     (S-11). Every stochastic call a module makes MUST draw from this —
     e.g. self.rng.random(), never the standalone `random` module or a
     fresh np.random.default_rng() — otherwise two runs from the same
     seed will not produce identical results."""
 
-    def count(self, filter_expr: str | None = None) -> int:
-        """Count agents matching filter_expr, or all agents if None."""
-        ...
+	def count(self, filter_expr: str | None = None) -> int:
+		"""Count agents matching filter_expr, or all agents if None."""
+		...
 
-    def mean(self, attr: str, filter_expr: str | None = None) -> float:
-        """Compute the mean of attr across agents, optionally filtered."""
-        ...
+	def mean(self, attr: str, filter_expr: str | None = None) -> float:
+		"""Compute the mean of attr across agents, optionally filtered."""
+		...
 
-    def log_event(self, name: str, agent_id: str, data: dict[str, Any] | None = None) -> None:
-        """Record a named event for later analysis. Backed by S-10 —
-        not yet implemented."""
-        ...
+	def log_event(self, name: str, agent_id: str, data: dict[str, Any] | None = None) -> None:
+		"""Record a named event for later analysis. Backed by S-10 —
+		not yet implemented."""
+		...
 
-    def reproduce(
-        self,
-        agent_type: str,
-        parent_id: str,
-        fresh_attributes: list[str] | None = None,
-    ) -> None:
-        """Queue creation of a new agent of `agent_type`, inheriting from
-        the agent identified by `parent_id`.
+	def reproduce(
+		self,
+		agent_type: str,
+		parent_id: str,
+		fresh_attributes: list[str] | None = None,
+	) -> None:
+		"""Queue creation of a new agent of `agent_type`, inheriting from
+		the agent identified by `parent_id`.
 
-        Does NOT create the agent immediately — queues a ReproduceEvent
-        (see lifecycle.py) applied at step-end.
+		Does NOT create the agent immediately — queues a ReproduceEvent
+		(see lifecycle.py) applied at step-end.
 
-        By default every attribute is INHERITED — the child's value is
-        copied exactly from the parent's current value. Pass attribute
-        names in fresh_attributes to freshly sample those specific
-        attributes instead (from that AttributeDefinition's distribution),
-        same as a brand-new agent would be sampled at population
-        initialisation. This is inheritance-with-mutation, similar in
-        spirit to a genetic algorithm's offspring generation, though this
-        platform does not implement selection/fitness/crossover itself —
-        only the inherit-vs-fresh sampling primitive.
+		By default every attribute is INHERITED — the child's value is
+		copied exactly from the parent's current value. Pass attribute
+		names in fresh_attributes to freshly sample those specific
+		attributes instead (from that AttributeDefinition's distribution),
+		same as a brand-new agent would be sampled at population
+		initialisation. This is inheritance-with-mutation, similar in
+		spirit to a genetic algorithm's offspring generation, though this
+		platform does not implement selection/fitness/crossover itself —
+		only the inherit-vs-fresh sampling primitive.
 
-        Args:
-            agent_type: the AgentType name for the new agent
-            parent_id: the agent_id to inherit attribute values from
-            fresh_attributes: attribute names to freshly sample instead
-                of inheriting. None or empty list means inherit everything.
-        """
-        ...
+		Args:
+		    agent_type: the AgentType name for the new agent
+		    parent_id: the agent_id to inherit attribute values from
+		    fresh_attributes: attribute names to freshly sample instead
+		        of inheriting. None or empty list means inherit everything.
+		"""
+		...
 
-    def remove(self, agent_id: str) -> None:
-        """Queue removal of the given agent.
+	def remove(self, agent_id: str) -> None:
+		"""Queue removal of the given agent.
 
-        Does NOT remove the agent immediately — queues a RemoveEvent
-        applied at step-end. This is the only removal primitive; there
-        is no separate condition-based or probabilistic removal method.
-        A module author implements those patterns themselves:
+		Does NOT remove the agent immediately — queues a RemoveEvent
+		applied at step-end. This is the only removal primitive; there
+		is no separate condition-based or probabilistic removal method.
+		A module author implements those patterns themselves:
 
-            if agent.get("health") <= 0:
-                model.remove(agent.agent_id)
+		    if agent.get("health") <= 0:
+		        model.remove(agent.agent_id)
 
-            if model.rng.random() < 0.05:
-                model.remove(agent.agent_id)
+		    if model.rng.random() < 0.05:
+		        model.remove(agent.agent_id)
 
-        Args:
-            agent_id: the agent to remove
-        """
+		Args:
+		    agent_id: the agent to remove
+		"""
 
-    def external_entry(self, agent_type: str, count: int) -> None:
-        """Queue creation of `count` new agents of `agent_type`, with no
-        parent — every attribute is freshly sampled, same as initial
-        population generation. There is no inherit option here, since
-        there's nothing to inherit from.
+	def external_entry(self, agent_type: str, count: int) -> None:
+		"""Queue creation of `count` new agents of `agent_type`, with no
+		parent — every attribute is freshly sampled, same as initial
+		population generation. There is no inherit option here, since
+		there's nothing to inherit from.
 
-        Does NOT create the agents immediately — queues an
-        ExternalEntryEvent applied at step-end.
+		Does NOT create the agents immediately — queues an
+		ExternalEntryEvent applied at step-end.
 
-        A module author implements the "configurable step interval" from
-        the ticket themselves, using model.step:
+		A module author implements the "configurable step interval" from
+		the ticket themselves, using model.step:
 
-            if model.step % 10 == 0:
-                model.external_entry("person", count=5)
+		    if model.step % 10 == 0:
+		        model.external_entry("person", count=5)
 
-        Args:
-            agent_type: the AgentType name for the new agents
-            count: how many agents to add
-        """
+		Args:
+		    agent_type: the AgentType name for the new agents
+		    count: how many agents to add
+		"""
 
 
 # ---------------------------------------------------------------------------
 # Concrete implementation
 # ---------------------------------------------------------------------------
 
+
 class SimulationModel:
-    """Concrete implementation of the Model Protocol.
+	"""Concrete implementation of the Model Protocol.
 
-    LIFETIME: one SimulationModel instance persists across the WHOLE
-    simulation run — it is built once before the step loop starts, not
-    rebuilt every step. This matters for fields like `rng` that must
-    stay the same object across steps (rebuilding would risk accidentally
-    losing RNG state between steps).
+	LIFETIME: one SimulationModel instance persists across the WHOLE
+	simulation run — it is built once before the step loop starts, not
+	rebuilt every step. This matters for fields like `rng` that must
+	stay the same object across steps (rebuilding would risk accidentally
+	losing RNG state between steps).
 
-    Step-scoped fields (pending_events) are reset via _reset_for_step(),
-    called by executor.py's run_step once at the start of each step —
-    NOT by constructing a new SimulationModel each time.
+	Step-scoped fields (pending_events) are reset via _reset_for_step(),
+	called by executor.py's run_step once at the start of each step —
+	NOT by constructing a new SimulationModel each time.
 
-    params and rng are populated from SimulationConfig by
-    Simulation.from_config() (S-11) — the defaults here (empty dict,
-    unseeded RNG) only apply when a SimulationModel is constructed
-    directly, e.g. in tests. log_event's actual event storage is still
-    a stub (plain list, no real persistence) pending S-09 (Data
-    Collection) — replace that internal without needing to change this
-    class's public interface.
-    """
+	params and rng are populated from SimulationConfig by
+	Simulation.from_config() (S-11) — the defaults here (empty dict,
+	unseeded RNG) only apply when a SimulationModel is constructed
+	directly, e.g. in tests. log_event's actual event storage is still
+	a stub (plain list, no real persistence) pending S-09 (Data
+	Collection) — replace that internal without needing to change this
+	class's public interface.
+	"""
 
-    def __init__(self, params: dict[str, Any] | None = None, seed: int | None = None, rng: np.random.Generator | None = None):
-        self.step: int = 0
-        self.agents: list[AgentState] = []
-        self.params: dict[str, Any] = params or {}
-        self.rng: np.random.Generator = rng if rng is not None else np.random.default_rng(seed)
+	def __init__(
+		self,
+		params: dict[str, Any] | None = None,
+		seed: int | None = None,
+		rng: np.random.Generator | None = None,
+	):
+		self.step: int = 0
+		self.agents: list[AgentState] = []
+		self.params: dict[str, Any] = params or {}
+		self.rng: np.random.Generator = rng if rng is not None else np.random.default_rng(seed)
 
-        # Step-scoped — reset every step via _reset_for_step, never
-        # persists across steps.
-        self._pending_events: list = []
+		# Step-scoped — reset every step via _reset_for_step, never
+		# persists across steps.
+		self._pending_events: list = []
 
-        # Stub event log — S-10 will replace this with real persistence.
-        self._event_log: list[dict[str, Any]] = []
-        self._aggregate_log: list[dict[str, Any]] = []
+		# Stub event log — S-10 will replace this with real persistence.
+		self._event_log: list[dict[str, Any]] = []
+		self._aggregate_log: list[dict[str, Any]] = []
 
-    def _reset_for_step(self, step_number: int, live_population: dict[str, AgentState]) -> None:
-        """Called by run_step once at the start of each step. Updates
-        step-scoped fields; does NOT touch run-scoped fields like rng."""
-        self.step = step_number
-        self.agents = list(live_population.values())
-        self._pending_events = []
+	def _reset_for_step(self, step_number: int, live_population: dict[str, AgentState]) -> None:
+		"""Called by run_step once at the start of each step. Updates
+		step-scoped fields; does NOT touch run-scoped fields like rng."""
+		self.step = step_number
+		self.agents = list(live_population.values())
+		self._pending_events = []
 
-    def count(self, filter_expr: str | None = None) -> int:
-        if filter_expr is None:
-            return len(self.agents)
-        from behaviour.condition import _evaluate_condition
-        return sum(1 for a in self.agents if _evaluate_condition(filter_expr, a))
+	def count(self, filter_expr: str | None = None) -> int:
+		if filter_expr is None:
+			return len(self.agents)
+		from behaviour.condition import _evaluate_condition
 
-    def mean(self, attr: str, filter_expr: str | None = None) -> float:
-        matching = self.agents
-        if filter_expr is not None:
-            from behaviour.condition import _evaluate_condition
-            matching = [a for a in self.agents if _evaluate_condition(filter_expr, a)]
-        if not matching:
-            raise ValueError(f"mean(): no agents match filter_expr {filter_expr!r}")
-        return sum(a.get(attr) for a in matching) / len(matching)
+		return sum(1 for a in self.agents if _evaluate_condition(filter_expr, a))
 
-    def sum(self, attr: str, filter_expr: str | None = None) -> float:
-        matching = self.agents
-        if filter_expr is not None:
-            from behaviour.condition import _evaluate_condition
-            matching = [a for a in self.agents if _evaluate_condition(filter_expr, a)]
-        return sum(a.get(attr) for a in matching)
+	def mean(self, attr: str, filter_expr: str | None = None) -> float:
+		matching = self.agents
+		if filter_expr is not None:
+			from behaviour.condition import _evaluate_condition
 
-    def log_event(self, event_type: str, agent_id: str | None, data: dict[str, Any] | None = None) -> None:
-        """Append a structured event record to the in-memory event log,
-        and emit it through the shared 'simulator' logger (INFO level)
-        so it shows up on stdout / the run's log file.
+			matching = [a for a in self.agents if _evaluate_condition(filter_expr, a)]
+		if not matching:
+			raise ValueError(f'mean(): no agents match filter_expr {filter_expr!r}')
+		return sum(a.get(attr) for a in matching) / len(matching)
 
-        Real persistence of the in-memory log (self._event_log) is a
-        separate, still-stubbed concern - see Event Log Memory
-        Management placeholder, pending S-09 (Data Collection).
-        """
-        record = {
-            "step": self.step,
-            "event_type": event_type,
-            "agent_id": agent_id,
-            "timestamp_ms": int(time.time() * 1000),
-            "data": data if data is not None else {},
-        }
-        self._event_log.append(record)
+	def sum(self, attr: str, filter_expr: str | None = None) -> float:
+		matching = self.agents
+		if filter_expr is not None:
+			from behaviour.condition import _evaluate_condition
 
-        agent_part = f" agent={agent_id}" if agent_id is not None else ""
-        data_part = f" data={record['data']}" if record["data"] else ""
-        logger.info(
-            "[step=%s] %s%s%s", self.step, event_type, agent_part, data_part
-        )
+			matching = [a for a in self.agents if _evaluate_condition(filter_expr, a)]
+		return sum(a.get(attr) for a in matching)
 
-    def get_events(self, event_types: list[str] | None = None) -> list[dict[str, Any]]:
-        """Return logged events, optionally filtered to the given types
-        (union - any event matching any listed type is included).
+	def log_event(self, event_type: str, agent_id: str | None, data: dict[str, Any] | None = None) -> None:
+		"""Append a structured event record to the in-memory event log,
+		and emit it through the shared 'simulator' logger (INFO level)
+		so it shows up on stdout / the run's log file.
 
-        event_types=None (default) returns everything. event_types=[]
-        returns nothing.
-        """
-        if event_types is None:
-            return list(self._event_log)
-        return [e for e in self._event_log if e["event_type"] in event_types]
+		Real persistence of the in-memory log (self._event_log) is a
+		separate, still-stubbed concern - see Event Log Memory
+		Management placeholder, pending S-09 (Data Collection).
+		"""
+		record = {
+			'step': self.step,
+			'event_type': event_type,
+			'agent_id': agent_id,
+			'timestamp_ms': int(time.time() * 1000),
+			'data': data if data is not None else {},
+		}
+		self._event_log.append(record)
 
-    def get_aggregates(self) -> list[dict[str, Any]]:
-        """Return all collected aggregate rows, one dict per step."""
-        return list(self._aggregate_log)
+		agent_part = f' agent={agent_id}' if agent_id is not None else ''
+		data_part = f' data={record["data"]}' if record['data'] else ''
+		logger.info('[step=%s] %s%s%s', self.step, event_type, agent_part, data_part)
 
-    def reproduce(
-        self,
-        agent_type: str,
-        parent_id: str,
-        fresh_attributes: list[str] | None = None,
-    ) -> None:
-        from lifecycle.lifecycle import ReproduceEvent
-        self._pending_events.append(ReproduceEvent(
-            agent_type=agent_type,
-            parent_id=parent_id,
-            fresh_attributes=fresh_attributes or [],
-        ))
+	def get_events(self, event_types: list[str] | None = None) -> list[dict[str, Any]]:
+		"""Return logged events, optionally filtered to the given types
+		(union - any event matching any listed type is included).
 
-    def remove(self, agent_id: str) -> None:
-        from lifecycle.lifecycle import RemoveEvent
-        self._pending_events.append(RemoveEvent(agent_id=agent_id))
+		event_types=None (default) returns everything. event_types=[]
+		returns nothing.
+		"""
+		if event_types is None:
+			return list(self._event_log)
+		return [e for e in self._event_log if e['event_type'] in event_types]
 
-    def external_entry(self, agent_type: str, count: int) -> None:
-        from lifecycle.lifecycle import ExternalEntryEvent
-        self._pending_events.append(ExternalEntryEvent(agent_type=agent_type, count=count))
+	def get_aggregates(self) -> list[dict[str, Any]]:
+		"""Return all collected aggregate rows, one dict per step."""
+		return list(self._aggregate_log)
+
+	def reproduce(
+		self,
+		agent_type: str,
+		parent_id: str,
+		fresh_attributes: list[str] | None = None,
+	) -> None:
+		from lifecycle.lifecycle import ReproduceEvent
+
+		self._pending_events.append(
+			ReproduceEvent(
+				agent_type=agent_type,
+				parent_id=parent_id,
+				fresh_attributes=fresh_attributes or [],
+			)
+		)
+
+	def remove(self, agent_id: str) -> None:
+		from lifecycle.lifecycle import RemoveEvent
+
+		self._pending_events.append(RemoveEvent(agent_id=agent_id))
+
+	def external_entry(self, agent_type: str, count: int) -> None:
+		from lifecycle.lifecycle import ExternalEntryEvent
+
+		self._pending_events.append(ExternalEntryEvent(agent_type=agent_type, count=count))

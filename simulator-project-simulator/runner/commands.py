@@ -85,129 +85,82 @@ def default_config(n: int, t: int) -> dict:
 	#     "stopping": {"max_steps": t, "conditions": [], "combinator": "OR"},
 	# }
 
-	# return {
-	#     "seed": 1,
-	#     "agent_types": [
-	#         {
-	#             "name": "agent",
-	#             "count": n,
-	#             "generation_mode": "heterogeneous",
-	#             "attributes": [
-	#                 {
-	#                     "name": "age",
-	#                     "type": "int",
-	#                     "population_method": "distribution",
-	#                     "distribution": {"kind": "fixed", "value": 18},
-	#                 },
-	#                 {
-	#                     "name": "energy",
-	#                     "type": "float",
-	#                     "population_method": "distribution",
-	#                     "distribution": {"kind": "normal", "mean": 50.0, "stddev": 12.0},
-	#                 },
-	#                 {
-	#                     "name": "gender",
-	#                     "type": "categorical",
-	#                     "population_method": "distribution",
-	#                     "distribution": {
-	#                         "kind": "categorical",
-	#                         "weights": {"male": 0.25, "female": 0.75},
-	#                     },
-	#                 },
-	#                 {
-	#                     "name": "region",
-	#                     "type": "categorical",
-	#                     "population_method": "distribution",
-	#                     "distribution": {
-	#                         "kind": "categorical",
-	#                         "weights": {"north": 0.25, "south": 0.25, "east": 0.25, "west": 0.25},
-	#                     },
-	#                 },
-	#             ],
-	#         }
-	#     ],
-	#     "topologies": {"contact": {"mode": "all_pairs", "agent_types": ["agent"]}},
-	#     "behaviours": {
-	#         "agent": [{"field": "age", "expression": "state['age'] + 1"},
-	#                   {
-	#                       "condition": "state['energy'] >= 50",
-	#                       "then": [
-	#                           {"field": "energy",
-	#                            "expression": "state['energy'] + 0.1 * len([n for n in neighbours if n['region'] == state['region']])"},
-	#                       ],
-	#                       "else": [
-	#                           {
-	#                               "field": "energy",
-	#                               # gain 10% of the gap to the neighbours' mean, never lose
-	#                               "expression": (
-	#                                   "state['energy'] + 0.1 * max(0, "
-	#                                   "sum(n['energy'] for n in neighbours) / len(neighbours)"
-	#                                   " - state['energy']) if len(neighbours) > 0 "
-	#                                   "else state['energy']"
-	#                               ),
-	#                               "topology_name": "contact",  # optional with one topology
-	#                           },
-	#                       ],
-	#                   },
-	#                   {
-	#                       "condition": "state['gender'] == 'male'",
-	#                       "then": [
-	#                           {
-	#                               "field": "energy", "expression": "state['energy'] - 1.5"
-	#                           },
-	#                       ]
-	#                   },
-	#                   ]
-	#     },
-	#     "scheduler": {"order": "all_at_once", "read_mode": "frozen"},
-	#     "stopping": {"max_steps": t, "conditions": [], "combinator": "OR"},
-	# }
-
 	return {
-		'seed': 42,
-		'agent_types': [
-			{
-				'name': 'person',
-				'count': 10,
-				'generation_mode': 'heterogeneous',
-				'attributes': [
-					{
-						'name': 'status',
-						'type': 'categorical',
-						'population_method': 'distribution',
-						'distribution': {
-							'kind': 'categorical',
-							'weights': {'S': 0.98, 'I': 0.02},
-						},
-					}
-				],
-			}
-		],
-		'topologies': {'contact': {'mode': 'random_sample', 'k': 5}},
-		'behaviours': {
-			'person': [
-				{
-					'condition': "state['status'] == 'S'",
-					'then': [
-						{
-							'field': 'status',
-							'expression': "'I' if random() < 1 - 0.9 ** neighbor_count(\"state['status'] == 'I'\") else 'S'",
-						}
-					],
-					'else': [
-						{
-							'condition': "state['status'] == 'I' and random() < 0.1",
-							'then': [{'field': 'status', 'expression': "'R'"}],
-						}
-					],
-				}
-			]
-		},
-		'scheduler': {'order': 'random', 'read_mode': 'frozen'},
-		'stopping': {
-			'max_steps': 3,
-			'conditions': ["model.count(\"state['status'] == 'I'\") == 0"],
-		},
+	    "seed": 1,
+	    "agent_types": [
+	        {
+	            "name": "agent",
+	            "count": n,
+	            "generation_mode": "heterogeneous",
+	            "attributes": [
+	                {
+	                    "name": "age",
+	                    "type": "int",
+	                    "population_method": "distribution",
+	                    "distribution": {"kind": "fixed", "value": 18},
+	                },
+	                {
+	                    "name": "energy",
+	                    "type": "float",
+	                    "population_method": "distribution",
+	                    "distribution": {"kind": "normal", "mean": 50.0, "stddev": 12.0},
+	                },
+	                {
+	                    "name": "gender",
+	                    "type": "categorical",
+	                    "population_method": "distribution",
+	                    "distribution": {
+	                        "kind": "categorical",
+	                        "weights": {"male": 0.25, "female": 0.75},
+	                    },
+	                },
+	                {
+	                    "name": "region",
+	                    "type": "categorical",
+	                    "population_method": "distribution",
+	                    "distribution": {
+	                        "kind": "categorical",
+	                        "weights": {"north": 0.25, "south": 0.25, "east": 0.25, "west": 0.25},
+	                    },
+	                },
+	            ],
+	        }
+	    ],
+	    "topologies": {"contact": {"mode": "all_pairs", "agent_types": ["agent"]}},
+	    "behaviours": {
+	        "agent": [{"field": "age", "expression": "state['age'] + 1"},
+	                  {
+	                      "condition": "state['energy'] >= 50",
+	                      "then": [
+	                          {"field": "energy",
+	                           "expression": "state['energy'] + 0.1 * len([n for n in neighbours if n['region'] == state['region']])"},
+	                      ],
+	                      "else": [
+	                          {
+	                              "field": "energy",
+	                              # gain 10% of the gap to the neighbours' mean, never lose
+	                              "expression": (
+	                                  "state['energy'] + 0.1 * max(0, "
+	                                  "sum(n['energy'] for n in neighbours) / len(neighbours)"
+	                                  " - state['energy']) if len(neighbours) > 0 "
+	                                  "else state['energy']"
+	                              ),
+	                              "topology_name": "contact",  # optional with one topology
+	                          },
+	                      ],
+	                  },
+	                  {
+	                      "condition": "state['gender'] == 'male'",
+	                      "then": [
+	                          {
+	                              "field": "energy", "expression": "state['energy'] - 1.5"
+	                          },
+	                      ]
+	                  },
+	                  ]
+	    },
+	    "scheduler": {"order": "all_at_once", "read_mode": "frozen"},
+	    "stopping": {"max_steps": t, "conditions": [], "combinator": "OR"},
 	}
 
 
@@ -471,7 +424,7 @@ def do_look():
 
 
 def usage():
-	logger.info('python3 simulation.py [N] [T] ... [-c | --config <file_location>] [-f (filename)] [-verbose | --v <log_level>] [run]')
+	logger.info('python3 simulation.py [N] [T] ... [-c | --config <file_location>] [-f (filename)] [-verbose | --v <log_level>] [--run|run] [--help|help]')
 
 
 def basic_settings():

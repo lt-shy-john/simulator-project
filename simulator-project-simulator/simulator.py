@@ -24,15 +24,21 @@ if len(sys.argv) == 3:
 		commands.set_T()
 	else:
 		commands.settings['T'] = T
-
-	# Express 'run' can't build a full config the way 'setting' does —
-	# N and T are the only inputs available here — so it runs a
-	# hardcoded minimal default config instead (see commands.default_config)
-	# as a quick smoke test, not a real simulation.
-	if sys.argv[-1] == 'run':
-		commands.do_run_default()
+# Express 'run' can't build a full config the way 'setting' does —
+# N and T are the only inputs available here — so it runs a
+# hardcoded minimal default config instead (see commands.default_config)
+# as a quick smoke test, not a real simulation.
+elif len(sys.argv) == 4 and (sys.argv[-1] == '--run' or sys.argv[-1] == 'run'):
+	commands.settings['N'] = int(sys.argv[1])
+	commands.settings['T'] = int(sys.argv[2])
+	commands.do_run_default()
 else:
-	if sys.argv[-1] == 'help':
+	# Express run
+	if sys.argv[-1] == '--run' or sys.argv[-1] == 'run':
+		commands.settings['N'] = 10
+		commands.settings['T'] = 3
+		commands.do_run_default()
+	elif sys.argv[-1] == '--help' or sys.argv[-1] == 'help':
 		commands.usage()
 		commands.do_help()
 		sys.exit(0)

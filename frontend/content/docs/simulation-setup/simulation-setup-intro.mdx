@@ -1,0 +1,191 @@
+---
+title: Introduction
+description: Create your simulation set through config. 
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+ 
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+## What is this?
+ 
+Imagine a small village. You want to know what happens if an illness arrives, or if a
+new shop opens, or if rumours start to spread. You could write equations for the whole
+village at once. Or you could do what actually happens in real life: look at each
+person, ask what they do, and watch what unfolds when all of them act together.
+ 
+That second approach is an **agent-based simulation**. You describe individual
+**agents** (people, animals, companies, anything), say how they behave, and run time
+forward one **step** at a time. The big picture, such as an epidemic curve or a market
+crash, **emerges** from many small decisions, and you never have to program it directly.
+ 
+This simulator lets you build one by describing your village in a configuration. In
+most cases you don't write code.
+ 
+<Callout title="You might use it to study" type="info">
+How a disease spreads through a population. How a rumour moves through a social network.
+How predators and prey affect each other. How a market reacts when traders copy their
+neighbours.
+</Callout>
+## The five building blocks
+ 
+Every simulation is built from the same five parts. Each has its own guide.
+ 
+<Cards>
+  <Card title="1. Agents: who lives here">
+    The people (or animals, or firms) in your simulation, and what each one carries,
+    such as age or health. See [Creating Agents](/docs/simulation-setup/creating-agents).
+  </Card>
+  <Card title="2. Topologies: who knows whom">
+    The map of links between agents. A disease passes between neighbours, not between
+    strangers on opposite sides of the world. See [Topologies](/docs/simulation-setup/topologies).
+  </Card>
+  <Card title="3. Behaviours: what they do">
+    The rules each agent follows every step. Short rules cover most things, and Python
+    modules cover the rest. See [Behaviour Expressions](/docs/simulation-setup/behaviour-expression) and
+    [Behaviour Modules](/docs/behaviour-modules).
+  </Card>
+  <Card title="4. Scheduler: who acts, and when">
+    Whether everyone acts at once, in a random order, or by priority, and what they see
+    when they act. See [Scheduler](/docs/simulation-setup/scheduler).
+  </Card>
+  <Card title="5. Stopping: when it ends">
+    A hard limit on the number of steps, plus optional early exits. See
+    [Stopping Conditions](/docs/simulation-setup/stopping-conditions).
+  </Card>
+</Cards>
+## What happens in one step
+ 
+A simulation is a loop. At every step, the same things happen in the same order.
+ 
+<Steps>
+  <Step>
+    **The scheduler decides who acts.** Everyone, a random few, or some in a set order.
+  </Step>
+  <Step>
+    **Each agent follows its behaviours.** It reads its own attributes, looks at its
+    neighbours through the topology, and works out its new values.
+  </Step>
+  <Step>
+    **Births, deaths and arrivals are applied.** Agents that were queued to be created or
+    removed during the step are added or removed together at the end.
+  </Step>
+  <Step>
+    **The stopping conditions are checked.** If one is met, or the step limit has been
+    reached, the run ends. Otherwise the next step begins.
+  </Step>
+</Steps>
+## Your first simulation
+ 
+Here is a small epidemic. Five hundred people live in a village. Two percent start the
+simulation infected. Every step, each healthy person might catch the illness from
+neighbours who are infected, and each infected person might recover.
+ 
+```json
+{
+  "seed": 42,
+  "agent_types": [
+    {
+      "name": "person",
+      "count": 10,
+      "generation_mode": "heterogeneous",
+      "attributes": [
+        {
+          "name": "status",
+          "type": "categorical",
+          "population_method": "distribution",
+          "distribution": { "kind": "categorical", "weights": { "S": 0.98, "I": 0.02 } }
+        }
+      ]
+    }
+  ],
+  "topologies": {
+    "contact": { "mode": "random_sample", "k": 5 }
+  },
+  "behaviours": {
+    "person": [
+      {
+        "condition": "state['status'] == 'S'",
+        "then": [
+          {
+            "field": "status",
+            "expression": "'I' if random() < 1 - 0.9 ** neighbor_count(\"state['status'] == 'I'\") else 'S'"
+          }
+        ],
+        "else": [
+          {
+            "condition": "state['status'] == 'I' and random() < 0.1",
+            "then": [{ "field": "status", "expression": "'R'" }]
+          }
+        ]
+      }
+    ]
+  },
+  "scheduler": { "order": "random", "read_mode": "frozen" },
+  "stopping": {
+    "max_steps": 3,
+    "conditions": ["model.count(\"state['status'] == 'I'\") == 0"]
+  }
+}
+```
+ 
+Reading it aloud, section by section:
+ 
+| Section | In plain words |
+|---|---|
+| `agent_types` | 500 people. 98 in 100 start healthy (`S`), 2 in 100 start infected (`I`). |
+| `topologies` | Each step, every person meets 5 random people. |
+| `behaviours` | A healthy person has a 10% chance of infection from *each* infected person they meet. An infected person has a 10% chance of recovering (`R`) each step. |
+| `scheduler` | People act in a random order, and everyone sees the village as it was at the start of the step. |
+| `stopping` | Stop after 200 steps, or sooner if nobody is infected any more. |
+| `seed` | Use 42 as the starting point for the random numbers, so that you can repeat the run exactly. |
+ 
+<Callout title="Why 0.9 to the power of the count?" type="info">
+If each infected neighbour has a 10% chance of passing the illness on, the chance of
+*escaping* all of them is 0.9 multiplied by itself once per infected neighbour. One minus
+that is the chance of catching it.
+</Callout>
+## Running it
+ 
+You can build a configuration by answering questions in the command line (`setting`),
+then start the run (`run`). You can also write the configuration yourself and give it to
+the simulator.
+ 
+<Callout title="To confirm" type="warn">
+Add the exact commands to install and start the simulator, and say whether the web
+interface is available yet. This page deliberately does not describe either until they
+are confirmed.
+</Callout>
+## Getting the same result twice
+ 
+Randomness is part of most simulations. Setting a top-level `seed` makes it repeatable.
+Run the same configuration with the same seed, and you get exactly the same result.
+Change the seed, and you get a different, equally valid run.
+ 
+For rules that draw random numbers, see the
+[randomness section](/docs/simulation-setup/behaviour-expression#randomness).
+ 
+## Where to go next
+
+If you want to...
+<Steps>
+  <Step>
+    **Define who is in your simulation:** [Creating Agents](/docs/simulation-setup/creating-agents)
+  </Step>
+  <Step>
+    **Decide who is connected to whom:** [Topologies](/docs/simulation-setup/topologies)
+  </Step>
+  <Step>
+    **Make agents do things:** [Behaviour Expressions](/docs/simulation-setup/behaviour-expression) or [Behaviour Modules](/docs/simulation-setup/behaviour-modules)
+  </Step>
+  <Step>
+    **Control who acts, and in what order:** [Scheduler](/docs/simulation-setup/scheduler)
+  </Step>
+  <Step>
+    **Decide when the simulation ends:** [Stopping Conditions](/docs/simulation-setup/stopping-conditions)
+  </Step>
+  <Step>
+    **Look up an exact setting:** The reference page that goes with each guide
+  </Step>
+</Steps>

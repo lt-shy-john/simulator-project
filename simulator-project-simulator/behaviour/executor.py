@@ -55,38 +55,39 @@ from lifecycle.lifecycle import apply_pending_lifecycle_events
 from stopping.engine import check_stopping, StopResult, StoppingConfig
 from util.collector import collect_aggregates
 
-logger = logging.getLogger("simulator")
+logger = logging.getLogger('simulator')
 
 
 # ---------------------------------------------------------------------------
 # Compiled entry types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CompiledModuleEntry:
-    instance: BehaviourModule
-    module_name: str
-    params: dict[str, Any]
-    topology_name: str | None
-    write_mode: WriteMode
+	instance: BehaviourModule
+	module_name: str
+	params: dict[str, Any]
+	topology_name: str | None
+	write_mode: WriteMode
 
 
 @dataclass(frozen=True)
 class CompiledRuleEntry:
-    """A validated list of steps (plain and/or conditional) for one rule.
+	"""A validated list of steps (plain and/or conditional) for one rule.
 
-    Produced by compile_behaviours from {"field", "expression"} and
-    {"condition", "then", "else"} config entries, and executed by run_step
-    via run_rule_steps.
-    """
+	Produced by compile_behaviours from {"field", "expression"} and
+	{"condition", "then", "else"} config entries, and executed by run_step
+	via run_rule_steps.
+	"""
 
-    steps: list[RuleStep]
+	steps: list[RuleStep]
 
 
 @dataclass
 class CompiledExpressionEntry:
-    expr: str
-    topology_name: str | None
+	expr: str
+	topology_name: str | None
 
 
 CompiledEntry = Union[CompiledModuleEntry, CompiledExpressionEntry]
@@ -96,95 +97,96 @@ CompiledEntry = Union[CompiledModuleEntry, CompiledExpressionEntry]
 # Compilation — done once at simulation start
 # ---------------------------------------------------------------------------
 
+
 def compile_behaviours(
-    config: dict,
-    topologies: dict[str, TopologyProtocol],
+	config: dict,
+	topologies: dict[str, TopologyProtocol],
 ) -> dict[str, list[CompiledEntry]]:
-    behaviour_config = config.get("behaviour", {})
-    if not behaviour_config:
-        raise ValueError(
-            "Config must contain a 'behaviour' section with at least one "
-            "agent type's behaviour sequence defined."
-        )
+	behaviour_config = config.get('behaviour', {})
+	if not behaviour_config:
+		raise ValueError(
+			"Config must contain a 'behaviour' section with at least one agent type's behaviour sequence defined."
+		)
 
-    compiled: dict[str, list[CompiledEntry]] = {}
+	compiled: dict[str, list[CompiledEntry]] = {}
 
-    for agent_type_name, entries in behaviour_config.items():
-        compiled_entries: list[CompiledEntry] = []
+	for agent_type_name, entries in behaviour_config.items():
+		compiled_entries: list[CompiledEntry] = []
 
-        for entry in entries:
-            topology_name = entry.get("topology_name")
-            if topology_name is not None and topology_name not in topologies:
-                raise ValueError(
-                    f"Agent type '{agent_type_name}' behaviour entry references "
-                    f"unknown topology '{topology_name}'. "
-                    f"Known topologies: {sorted(topologies.keys())}"
-                )
+		for entry in entries:
+			topology_name = entry.get('topology_name')
+			if topology_name is not None and topology_name not in topologies:
+				raise ValueError(
+					f"Agent type '{agent_type_name}' behaviour entry references "
+					f"unknown topology '{topology_name}'. "
+					f'Known topologies: {sorted(topologies.keys())}'
+				)
 
-            if "field" in entry or "condition" in entry:
-                compiled_entries.append(
-                    CompiledRuleEntry(
-                        steps=build_rule_steps([entry], list(topologies))
-                    )
-                )
+			if 'field' in entry or 'condition' in entry:
+				compiled_entries.append(CompiledRuleEntry(steps=build_rule_steps([entry], list(topologies))))
 
-            elif "module" in entry:
-                module_name = entry["module"]
-                module_cls = get_behaviour(module_name)
-                params = entry.get("params", {})
-                instance = module_cls(**params)
+			elif 'module' in entry:
+				module_name = entry['module']
+				module_cls = get_behaviour(module_name)
+				params = entry.get('params', {})
+				instance = module_cls(**params)
 
-                write_mode = entry.get("write_mode", "deferred")
-                if write_mode not in ("deferred", "immediate"):
-                    raise ValueError(
-                        f"Agent type '{agent_type_name}' module '{module_name}' has "
-                        f"invalid write_mode '{write_mode}'. Expected 'deferred' or "
-                        f"'immediate'."
-                    )
+				write_mode = entry.get('write_mode', 'deferred')
+				if write_mode not in ('deferred', 'immediate'):
+					raise ValueError(
+						f"Agent type '{agent_type_name}' module '{module_name}' has "
+						f"invalid write_mode '{write_mode}'. Expected 'deferred' or "
+						f"'immediate'."
+					)
 
-                compiled_entries.append(CompiledModuleEntry(
-                    instance=instance,
-                    module_name=module_name,
-                    params=params,
-                    topology_name=topology_name,
-                    write_mode=write_mode,
-                ))
+				compiled_entries.append(
+					CompiledModuleEntry(
+						instance=instance,
+						module_name=module_name,
+						params=params,
+						topology_name=topology_name,
+						write_mode=write_mode,
+					)
+				)
 
-            elif "expression" in entry:
-                compiled_entries.append(CompiledExpressionEntry(
-                    expr=entry["expression"],
-                    topology_name=topology_name,
-                ))
+			elif 'expression' in entry:
+				compiled_entries.append(
+					CompiledExpressionEntry(
+						expr=entry['expression'],
+						topology_name=topology_name,
+					)
+				)
 
-            else:
-                raise ValueError(
-                    f"Agent type '{agent_type_name}' behaviour entry must contain "
-                    f"either 'module' or 'expression'. Got: {entry}"
-                )
+			else:
+				raise ValueError(
+					f"Agent type '{agent_type_name}' behaviour entry must contain "
+					f"either 'module' or 'expression'. Got: {entry}"
+				)
 
-        compiled[agent_type_name] = compiled_entries
+		compiled[agent_type_name] = compiled_entries
 
-    return compiled
+	return compiled
 
 
 # ---------------------------------------------------------------------------
 # Neighbour cache — built once per step, before the per-agent loop
 # ---------------------------------------------------------------------------
 
+
 def _build_neighbour_cache(
-    topologies: dict[str, TopologyProtocol],
-    soa,
+	topologies: dict[str, TopologyProtocol],
+	soa,
 ) -> dict[str, dict[str, list[str]]]:
-    cache: dict[str, dict[str, list[str]]] = {}
+	cache: dict[str, dict[str, list[str]]] = {}
 
-    for topology_name, topology in topologies.items():
-        cache[topology_name] = {}
-        for arrays in soa.values():
-            for agent_id in arrays[ID_KEY]:
-                aid = str(agent_id)
-                cache[topology_name][aid] = topology.get_neighbours(aid, soa)
+	for topology_name, topology in topologies.items():
+		cache[topology_name] = {}
+		for arrays in soa.values():
+			for agent_id in arrays[ID_KEY]:
+				aid = str(agent_id)
+				cache[topology_name][aid] = topology.get_neighbours(aid, soa)
 
-    return cache
+	return cache
 
 
 # ---------------------------------------------------------------------------
@@ -193,127 +195,139 @@ def _build_neighbour_cache(
 
 _DEFAULT_STOPPING_CONFIG = StoppingConfig(max_steps=sys.maxsize)
 
+
 def run_step(
-    live_population, compiled_behaviours, topologies, model, schedule,
-    agent_types, step_number, aggregate_collectors=None,
-    stopping_config=_DEFAULT_STOPPING_CONFIG,
-    sandbox: SandboxConfig | None = None,
+	live_population,
+	compiled_behaviours,
+	topologies,
+	model,
+	schedule,
+	agent_types,
+	step_number,
+	aggregate_collectors=None,
+	stopping_config=_DEFAULT_STOPPING_CONFIG,
+	sandbox: SandboxConfig | None = None,
 ) -> StopResult:
-    model._reset_for_step(step_number, live_population)
-    model.log_event("step_start", agent_id=None)
+	model._reset_for_step(step_number, live_population)
+	model.log_event('step_start', agent_id=None)
 
-    frozen_population = {
-        agent_id: agent.snapshot() for agent_id, agent in live_population.items()
-    }
-    soa = to_soa(list(frozen_population.values()))
-    neighbour_cache = _build_neighbour_cache(topologies, soa)
-    read_source = frozen_population if schedule.read_mode == "frozen" else live_population
-    deferred_writes: list[tuple[str, str, Any]] = []
-    ordered_agent_ids = resolve_step_agents(schedule, live_population, model.rng)
+	frozen_population = {agent_id: agent.snapshot() for agent_id, agent in live_population.items()}
+	soa = to_soa(list(frozen_population.values()))
+	neighbour_cache = _build_neighbour_cache(topologies, soa)
+	read_source = frozen_population if schedule.read_mode == 'frozen' else live_population
+	deferred_writes: list[tuple[str, str, Any]] = []
+	ordered_agent_ids = resolve_step_agents(schedule, live_population, model.rng)
 
-    for agent_id in ordered_agent_ids:
-        agent = live_population[agent_id]
-        entries = compiled_behaviours.get(agent.agent_type_name)
-        if not entries:
-            continue
-        for entry in entries:
-            if isinstance(entry, CompiledRuleEntry):
-                before = dict(agent.state)
-                run_rule_steps(
-                    entry.steps,
-                    agent,
-                    _make_neighbours_for(agent, read_source, neighbour_cache),
-                    sandbox=sandbox,
-                    rng=model.rng,
-                )
-                changed = {
-                    k: (before[k], v) for k, v in agent.state.items() if before[k] != v
-                }
-                if changed:
-                    logger.info(
-                        "[step=%s] rule steps triggered agent=%s changed=%s",
-                        model.step, agent.agent_id, changed,
-                    )
-                continue
+	for agent_id in ordered_agent_ids:
+		agent = live_population[agent_id]
+		entries = compiled_behaviours.get(agent.agent_type_name)
+		if not entries:
+			continue
+		for entry in entries:
+			if isinstance(entry, CompiledRuleEntry):
+				before = dict(agent.state)
+				run_rule_steps(
+					entry.steps,
+					agent,
+					_make_neighbours_for(agent, read_source, neighbour_cache),
+					sandbox=sandbox,
+					rng=model.rng,
+				)
+				changed = {k: (before[k], v) for k, v in agent.state.items() if before[k] != v}
+				if changed:
+					logger.info(
+						'[step=%s] rule steps triggered agent=%s changed=%s',
+						model.step,
+						agent.agent_id,
+						changed,
+					)
+				continue
 
-            neighbours = (
-                neighbour_cache.get(entry.topology_name, {}).get(agent.agent_id, [])
-                if entry.topology_name is not None else []
-            )
-            if isinstance(entry, CompiledModuleEntry):
-                accessor = NeighbourAccessor(
-                    read_source=read_source, live_population=live_population,
-                    deferred_writes=deferred_writes, write_mode=entry.write_mode,
-                )
-                entry.instance.apply(agent, neighbours, accessor, model)
-            else:
-                topology_cache = neighbour_cache.get(entry.topology_name, {})
-                neighbours_state = build_views_from_ids(
-                    neighbours,
-                    read_source,
-                    lambda aid, cache=topology_cache: cache.get(aid, []),
-                    max_neighbors=(sandbox or SandboxConfig()).max_neighbours,
-                )
-                before = dict(agent.state)
-                evaluate_expression(entry.expr, agent, neighbours_state, sandbox=sandbox, rng=model.rng,)
-                changed = {
-                    k: (before[k], v) for k, v in agent.state.items() if before[k] != v
-                }
-                if changed:
-                    logger.info(  # TODO: drop to logger.debug once S-0x logging levels land
-                        "[step=%s] rule triggered agent=%s expr=%r changed=%s",
-                        model.step, agent.agent_id, entry.expr, changed,
-                    )
-        consume_lifetime_action(schedule, agent)
+			neighbours = (
+				neighbour_cache.get(entry.topology_name, {}).get(agent.agent_id, [])
+				if entry.topology_name is not None
+				else []
+			)
+			if isinstance(entry, CompiledModuleEntry):
+				accessor = NeighbourAccessor(
+					read_source=read_source,
+					live_population=live_population,
+					deferred_writes=deferred_writes,
+					write_mode=entry.write_mode,
+				)
+				entry.instance.apply(agent, neighbours, accessor, model)
+			else:
+				topology_cache = neighbour_cache.get(entry.topology_name, {})
+				neighbours_state = build_views_from_ids(
+					neighbours,
+					read_source,
+					lambda aid, cache=topology_cache: cache.get(aid, []),
+					max_neighbors=(sandbox or SandboxConfig()).max_neighbours,
+				)
+				before = dict(agent.state)
+				evaluate_expression(
+					entry.expr,
+					agent,
+					neighbours_state,
+					sandbox=sandbox,
+					rng=model.rng,
+				)
+				changed = {k: (before[k], v) for k, v in agent.state.items() if before[k] != v}
+				if changed:
+					logger.info(  # TODO: drop to logger.debug once S-0x logging levels land
+						'[step=%s] rule triggered agent=%s expr=%r changed=%s',
+						model.step,
+						agent.agent_id,
+						entry.expr,
+						changed,
+					)
+		consume_lifetime_action(schedule, agent)
 
-    apply_deferred_writes(live_population, deferred_writes)
+	apply_deferred_writes(live_population, deferred_writes)
 
-    lifecycle_events = apply_pending_lifecycle_events(
-        live_population, model._pending_events, agent_types, model.rng
-    )
-    for record in lifecycle_events:
-        model.log_event(record["event_type"], agent_id=record["agent_id"], data=record["data"])
+	lifecycle_events = apply_pending_lifecycle_events(live_population, model._pending_events, agent_types, model.rng)
+	for record in lifecycle_events:
+		model.log_event(record['event_type'], agent_id=record['agent_id'], data=record['data'])
 
-    # Aggregate collection - end of step, after lifecycle events, same
-    # point stopping conditions are checked.
-    row = collect_aggregates(model, aggregate_collectors or [])
-    model._aggregate_log.append(row)
+	# Aggregate collection - end of step, after lifecycle events, same
+	# point stopping conditions are checked.
+	row = collect_aggregates(model, aggregate_collectors or [])
+	model._aggregate_log.append(row)
 
-    model.log_event("step_end", agent_id=None)
-    return check_stopping(model, stopping_config)
+	model.log_event('step_end', agent_id=None)
+	return check_stopping(model, stopping_config)
+
 
 def _make_neighbours_for(
-    agent: Any,
-    read_source: dict[str, Any],
-    neighbour_cache: dict[str, dict[str, list[str]]],
+	agent: Any,
+	read_source: dict[str, Any],
+	neighbour_cache: dict[str, dict[str, list[str]]],
 ) -> Callable[..., list[AgentState]]:
-    """Build the topology_name -> neighbour-state-list lookup for one agent.
+	"""Build the topology_name -> neighbour-state-list lookup for one agent.
 
-    With exactly one topology, a step without topology_name resolves to it
-    (matching "not required with 0 or 1 topologies"). With none, or with
-    several and no name, the step gets no neighbours; config validation
-    already guarantees a name wherever a neighbour helper needs one.
+	With exactly one topology, a step without topology_name resolves to it
+	(matching "not required with 0 or 1 topologies"). With none, or with
+	several and no name, the step gets no neighbours; config validation
+	already guarantees a name wherever a neighbour helper needs one.
 
-    Args:
-        agent: the AgentState currently being processed.
-        read_source: frozen_population or live_population, per schedule.read_mode.
-        neighbour_cache: topology name -> agent id -> neighbour ids.
+	Args:
+	    agent: the AgentState currently being processed.
+	    read_source: frozen_population or live_population, per schedule.read_mode.
+	    neighbour_cache: topology name -> agent id -> neighbour ids.
 
-    Returns:
-        A callable ``neighbours_for(topology_name, of=None)``. ``of`` is an
-        optional agent id whose neighbours are returned instead of
-        ``agent``'s; the comprehension sandbox uses it for deeper hops.
-    """
-    sole_topology = next(iter(neighbour_cache)) if len(neighbour_cache) == 1 else None
+	Returns:
+	    A callable ``neighbours_for(topology_name, of=None)``. ``of`` is an
+	    optional agent id whose neighbours are returned instead of
+	    ``agent``'s; the comprehension sandbox uses it for deeper hops.
+	"""
+	sole_topology = next(iter(neighbour_cache)) if len(neighbour_cache) == 1 else None
 
-    def neighbours_for(
-        topology_name: str | None, of: str | None = None
-    ) -> list[AgentState]:
-        name = topology_name if topology_name is not None else sole_topology
-        if name is None:
-            return []
-        owner = of if of is not None else agent.agent_id
-        ids = neighbour_cache.get(name, {}).get(owner, [])
-        return [read_source[nid] for nid in ids]
+	def neighbours_for(topology_name: str | None, of: str | None = None) -> list[AgentState]:
+		name = topology_name if topology_name is not None else sole_topology
+		if name is None:
+			return []
+		owner = of if of is not None else agent.agent_id
+		ids = neighbour_cache.get(name, {}).get(owner, [])
+		return [read_source[nid] for nid in ids]
 
-    return neighbours_for
+	return neighbours_for

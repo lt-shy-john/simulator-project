@@ -41,128 +41,124 @@ from typing import Any, Literal
 from runner.state import AgentState
 
 
-WriteMode = Literal["deferred", "immediate"]
+WriteMode = Literal['deferred', 'immediate']
 
 
 class NeighbourAccessor:
-    """Controlled read/write channel to neighbour state for one module's
-    apply() call.
+	"""Controlled read/write channel to neighbour state for one module's
+	apply() call.
 
-    A new NeighbourAccessor is constructed by the executor for each
-    module invocation, configured with that module's write_mode from
-    config, and with a read_source chosen according to schedule.read_mode
-    (see scheduling.py). Modules interact with neighbours exclusively
-    through this object — never through a raw AgentState reference.
-    """
+	A new NeighbourAccessor is constructed by the executor for each
+	module invocation, configured with that module's write_mode from
+	config, and with a read_source chosen according to schedule.read_mode
+	(see scheduling.py). Modules interact with neighbours exclusively
+	through this object — never through a raw AgentState reference.
+	"""
 
-    def __init__(
-        self,
-        read_source: dict[str, AgentState],
-        live_population: dict[str, AgentState],
-        deferred_writes: list[tuple[str, str, Any]],
-        write_mode: WriteMode,
-    ):
-        """
-        Args:
-            read_source: agent_id -> AgentState that all read() calls draw
-                from this step. Chosen by the executor based on
-                schedule.read_mode — the pre-step frozen snapshot under
-                "frozen" mode, or the live population under "live" mode.
-                This accessor has no opinion on which one it's given.
-            live_population: agent_id -> AgentState, the population
-                currently being mutated this step. Used for immediate
-                writes, regardless of read_mode.
-            deferred_writes: shared list that this accessor appends to
-                when write_mode is "deferred". The executor drains this
-                at step-end via apply_deferred_writes().
-            write_mode: "deferred" or "immediate" — determines how write()
-                behaves. Set by the executor from this module's config
-                entry, not by the module itself. Independent of read_mode.
-        """
-        self._read_source = read_source
-        self._live_population = live_population
-        self._deferred_writes = deferred_writes
-        self._write_mode = write_mode
+	def __init__(
+		self,
+		read_source: dict[str, AgentState],
+		live_population: dict[str, AgentState],
+		deferred_writes: list[tuple[str, str, Any]],
+		write_mode: WriteMode,
+	):
+		"""
+		Args:
+		    read_source: agent_id -> AgentState that all read() calls draw
+		        from this step. Chosen by the executor based on
+		        schedule.read_mode — the pre-step frozen snapshot under
+		        "frozen" mode, or the live population under "live" mode.
+		        This accessor has no opinion on which one it's given.
+		    live_population: agent_id -> AgentState, the population
+		        currently being mutated this step. Used for immediate
+		        writes, regardless of read_mode.
+		    deferred_writes: shared list that this accessor appends to
+		        when write_mode is "deferred". The executor drains this
+		        at step-end via apply_deferred_writes().
+		    write_mode: "deferred" or "immediate" — determines how write()
+		        behaves. Set by the executor from this module's config
+		        entry, not by the module itself. Independent of read_mode.
+		"""
+		self._read_source = read_source
+		self._live_population = live_population
+		self._deferred_writes = deferred_writes
+		self._write_mode = write_mode
 
-    def read(self, neighbour_id: str, key: str) -> Any:
-        """Read an attribute from a neighbour's state, via read_source.
+	def read(self, neighbour_id: str, key: str) -> Any:
+		"""Read an attribute from a neighbour's state, via read_source.
 
-        Which population read_source points to (frozen pre-step snapshot,
-        or live current-step state) is decided by the executor based on
-        schedule.read_mode — this method itself is agnostic to which.
+		Which population read_source points to (frozen pre-step snapshot,
+		or live current-step state) is decided by the executor based on
+		schedule.read_mode — this method itself is agnostic to which.
 
-        Args:
-            neighbour_id: the neighbour's agent ID
-            key: the attribute name to read
+		Args:
+		    neighbour_id: the neighbour's agent ID
+		    key: the attribute name to read
 
-        Returns:
-            the attribute value, as of whatever read_source represents
+		Returns:
+		    the attribute value, as of whatever read_source represents
 
-        Raises:
-            KeyError: if neighbour_id is not in read_source, or if key
-                is not a defined attribute for that agent
-        """
-        if neighbour_id not in self._read_source:
-            raise KeyError(
-                f"neighbour_id '{neighbour_id}' not found in read source."
-            )
-        return self._read_source[neighbour_id].get(key)
+		Raises:
+		    KeyError: if neighbour_id is not in read_source, or if key
+		        is not a defined attribute for that agent
+		"""
+		if neighbour_id not in self._read_source:
+			raise KeyError(f"neighbour_id '{neighbour_id}' not found in read source.")
+		return self._read_source[neighbour_id].get(key)
 
-    def write(self, neighbour_id: str, key: str, value: Any) -> None:
-        """Write an attribute to a neighbour's state.
+	def write(self, neighbour_id: str, key: str, value: Any) -> None:
+		"""Write an attribute to a neighbour's state.
 
-        Behaviour depends on write_mode, set by the executor from config
-        (independent of read_mode):
-          - "immediate": applied directly to live_population now.
-          - "deferred": queued, applied only at step-end.
+		Behaviour depends on write_mode, set by the executor from config
+		(independent of read_mode):
+		  - "immediate": applied directly to live_population now.
+		  - "deferred": queued, applied only at step-end.
 
-        Args:
-            neighbour_id: the neighbour's agent ID
-            key: the attribute name to write
-            value: the new value
+		Args:
+		    neighbour_id: the neighbour's agent ID
+		    key: the attribute name to write
+		    value: the new value
 
-        Raises:
-            KeyError: if neighbour_id is not in the live population
-                (immediate mode only — deferred writes are validated
-                when applied at step-end, not when queued)
-        """
-        if self._write_mode == "immediate":
-            if neighbour_id not in self._live_population:
-                raise KeyError(
-                    f"neighbour_id '{neighbour_id}' not found in live population."
-                )
-            self._live_population[neighbour_id].set(key, value)
-        else:  # deferred
-            self._deferred_writes.append((neighbour_id, key, value))
+		Raises:
+		    KeyError: if neighbour_id is not in the live population
+		        (immediate mode only — deferred writes are validated
+		        when applied at step-end, not when queued)
+		"""
+		if self._write_mode == 'immediate':
+			if neighbour_id not in self._live_population:
+				raise KeyError(f"neighbour_id '{neighbour_id}' not found in live population.")
+			self._live_population[neighbour_id].set(key, value)
+		else:  # deferred
+			self._deferred_writes.append((neighbour_id, key, value))
 
 
 def apply_deferred_writes(
-    live_population: dict[str, AgentState],
-    deferred_writes: list[tuple[str, str, Any]],
+	live_population: dict[str, AgentState],
+	deferred_writes: list[tuple[str, str, Any]],
 ) -> None:
-    """Apply all queued deferred writes to the live population at step-end.
+	"""Apply all queued deferred writes to the live population at step-end.
 
-    Called once by the executor after all agents' behaviour sequences
-    have run for this step, before the population is swapped back as
-    the new live state (S-02's apply_snapshot_updates).
+	Called once by the executor after all agents' behaviour sequences
+	have run for this step, before the population is swapped back as
+	the new live state (S-02's apply_snapshot_updates).
 
-    Writes are applied in the order they were queued. If multiple deferred
-    writes target the same (neighbour_id, key) pair, the last one queued
-    wins — no conflict detection or merging is performed.
+	Writes are applied in the order they were queued. If multiple deferred
+	writes target the same (neighbour_id, key) pair, the last one queued
+	wins — no conflict detection or merging is performed.
 
-    Args:
-        live_population: agent_id -> AgentState, mutated in place
-        deferred_writes: the queue populated by NeighbourAccessor.write()
-            calls during this step
+	Args:
+	    live_population: agent_id -> AgentState, mutated in place
+	    deferred_writes: the queue populated by NeighbourAccessor.write()
+	        calls during this step
 
-    Raises:
-        KeyError: if a queued neighbour_id is not found in live_population
-            at apply time (e.g. the agent was removed mid-step)
-    """
-    for neighbour_id, key, value in deferred_writes:
-        if neighbour_id not in live_population:
-            raise KeyError(
-                f"Cannot apply deferred write: neighbour_id '{neighbour_id}' "
-                f"not found in live population (may have been removed this step)."
-            )
-        live_population[neighbour_id].set(key, value)
+	Raises:
+	    KeyError: if a queued neighbour_id is not found in live_population
+	        at apply time (e.g. the agent was removed mid-step)
+	"""
+	for neighbour_id, key, value in deferred_writes:
+		if neighbour_id not in live_population:
+			raise KeyError(
+				f"Cannot apply deferred write: neighbour_id '{neighbour_id}' "
+				f'not found in live population (may have been removed this step).'
+			)
+		live_population[neighbour_id].set(key, value)

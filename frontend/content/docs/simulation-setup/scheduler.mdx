@@ -1,0 +1,125 @@
+---
+title: Scheduler
+description: Prioritise nad optimise your agent's behaviour.
+---
+
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+## The idea
+ 
+Every morning the village bell rings, and people get on with their day. But who goes
+first? Does everyone act, or only some? And when someone looks at their neighbours, do
+they see them as they were at dawn, or as they are right now?
+ 
+The **scheduler** answers these questions. It has two settings you must always give,
+and one optional extra.
+ 
+<Callout title="In short" type="info">
+`order` says **who goes first**. `read_mode` says **what people see**. An optional
+`quota` says **how many may act**. The first two are required.
+</Callout>
+```json
+"scheduler": {
+  "order": "random",
+  "read_mode": "frozen"
+}
+```
+ 
+`order` and `read_mode` are independent, so any pair of values works.
+ 
+## Order: who goes first
+ 
+<Cards>
+  <Card title="all_at_once">
+    Everyone acts, with no particular order. The simplest choice.
+  </Card>
+  <Card title="random">
+    A fresh random order every step, like drawing names from a hat each morning.
+  </Card>
+  <Card title="priority">
+    Agents with the highest value of an attribute go first, like the wealthiest villager
+    being served first at the market.
+  </Card>
+</Cards>
+For `priority`, also say which attribute to use:
+ 
+```json
+"scheduler": { "order": "priority", "priority_attribute": "wealth", "read_mode": "live" }
+```
+ 
+*"The richest agents act first."* Leaving out `priority_attribute` is an error.
+ 
+Two details are worth knowing:
+ 
+- Agents with the **same value** are shuffled among themselves, afresh every step. Nobody
+  gets a permanent advantage from a tie.
+- An agent that doesn't have the attribute counts as `0`.
+## Read mode: what people see
+ 
+<Cards>
+  <Card title="frozen: the photo at sunrise">
+    Everyone looks at their neighbours as they were at the **start of the step**. It
+    doesn't matter who acts first, because nobody sees anyone else's changes mid-step.
+  </Card>
+  <Card title="live: the notice board">
+    Everyone looks at their neighbours **as they are right now**. Someone acting later
+    can see the changes of someone who acted earlier.
+  </Card>
+</Cards>
+<Callout title="Which should I choose?" type="info">
+`frozen` is the safer starting point, because results don't depend on the order of
+agents. Use `live` when you want later agents to react to earlier ones.
+</Callout>
+## Quota: how many may act
+ 
+By default, everyone acts in every step. A **quota** limits that. There are two kinds,
+and you choose one.
+ 
+| Mode | In plain words | Example |
+|---|---|---|
+| `step_random_subset` | Each step, a random few get to act. | "Only 30 agents act each step." |
+| `lifetime_budget` | Each agent has a fixed number of actions for the whole run. | "Everyone gets 10 actions, ever." |
+ 
+```json
+"quota": { "mode": "step_random_subset", "limit": 30 }
+```
+ 
+```json
+"quota": { "mode": "lifetime_budget", "limit": 10 }
+```
+ 
+### Whose quota is it?
+ 
+Add `scope` to limit the quota to one type of agent.
+ 
+| `scope` | Meaning |
+|---|---|
+| Left out | The quota covers the **whole population**. "Only 30 agents of any kind act." |
+| `"predator"` | The quota covers **predators only**. "Only 30 predators act." Everyone else acts as usual. |
+ 
+```json
+"scheduler": {
+  "order": "random",
+  "read_mode": "frozen",
+  "quota": { "mode": "step_random_subset", "limit": 30, "scope": "predator" }
+}
+```
+ 
+<Callout title="Where the budget lives" type="info">
+A lifetime budget is tracked in each agent's own state, under `actions_remaining`.
+</Callout>
+## Common recipes
+ 
+| I want... | Use |
+|---|---|
+| Everyone to act at once, results independent of order | `all_at_once` with `frozen` |
+| A fair, shuffled order each step | `random` |
+| The most important agents to go first | `priority` with a `priority_attribute` |
+| Only a few agents to act each step | `step_random_subset` quota |
+| Each agent to have limited energy to act | `lifetime_budget` quota |
+ 
+## What next
+ 
+- Decide when the simulation ends: [Stopping Conditions](/docs/stopping-conditions).
+- Every setting in detail: [Scheduler Reference](/docs/scheduler-reference).

@@ -1,0 +1,169 @@
+---
+title: Behaviour Modules
+description: Reference for writing, registering and configuring code-based behaviour modules.
+---
+
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+
+A **behaviour module** is a Python class that defines agent behaviour in code. Rules
+(see [Behaviour Expressions](/docs/behaviour-expression)) cover most behaviour. A module
+is needed when a behaviour requires something an expression cannot do.
+
+| Capability | Rule (expression) | Module |
+|---|---|---|
+| Read the agent's own attributes | Yes | Yes |
+| Read neighbours | Yes | Yes, through `NeighbourAccessor` |
+| Change the agent's own attributes | Yes | Yes |
+| Change neighbours | No | Yes, through `NeighbourAccessor` |
+| Create or remove agents | No | Yes, through the model |
+| Arbitrary Python logic | No | Yes |
+
+## Configuring a module
+
+A module is used by adding an entry to the `behaviours` list of an agent type:
+
+```json
+"behaviours": {
+  "person": [
+    { "module": "SIRInfection", "params": { "rate": 0.3 } }
+  ]
+}
+```
+
+**Parameters**
+
+- **`module`** : *text*. The name the module is registered under.
+- **`params`** : *mapping, optional*. Parameters passed to the module.
+- **`write_mode`** : *`"deferred"` or `"immediate"`*. How the module's writes to
+  neighbours are applied. See [Reading and writing neighbours](#reading-and-writing-neighbours).
+
+<Callout title="To confirm" type="warn">
+Confirm the key name and default of `write_mode` on a module entry.
+</Callout>
+
+---
+
+## Registering a module
+
+A module class registers itself under a name with the `register_behaviour` decorator.
+The registered name is the value used for `module` in the configuration.
+
+```python
+from simulator.behaviour.registry import register_behaviour
+from simulator.behaviour.module import BehaviourModule  # confirm this import path
+
+
+@register_behaviour("SIRInfection")
+class SIRInfection(BehaviourModule):
+    """Moves susceptible agents to infected based on infected neighbours."""
+
+    # apply() is described in the next section.
+```
+
+### register_behaviour
+
+```
+register_behaviour(name)
+```
+
+A class decorator that adds the class to the registry. The class is returned unchanged.
+
+**Parameters**
+
+- **`name`** : *text*. The name the module is looked up by from the configuration.
+
+**Raises** : `ValueError` if `name` is already registered to a different class.
+Registering the same class again under the same name is allowed.
+
+The registry also provides `get_behaviour(name)`, which looks up a registered class, and
+`list_registered()`, which lists the registered names.
+
+<Callout title="A module must be imported to be registered" type="warn">
+The decorator runs only when Python imports the file that contains it. If a module does
+not appear in the registry, check that something imports its file before checking the
+decorator. The `__init__.py` of a module library folder must import every module file in
+that folder.
+</Callout>
+
+---
+
+## The apply method
+
+A module defines `apply()`. The simulation calls it for each agent that acts. The third
+argument is the **model**, the simulation-level context object.
+
+<Callout title="To confirm" type="warn">
+The base class `BehaviourModule` and the full signature of `apply()` are not yet
+documented here. Add them from `BehaviourModule`.
+</Callout>
+
+### The model
+
+| Member | Description |
+|---|---|
+| `step` | The current step. |
+| `agents` | The agents in the simulation. |
+| `params` | The global parameters of the simulation. |
+| `rng` | The random number generator of the simulation, a NumPy `Generator`. |
+| `count(...)`, `mean(...)` | Aggregate queries over the population. |
+| `log_event(...)` | Records an event in the event log. |
+| `reproduce(...)` | Queues the creation of a new agent from a parent. |
+| `remove(...)` | Queues the removal of an agent. |
+| `external_entry(...)` | Queues the entry of a new agent from outside the population. |
+
+### Creating and removing agents
+
+`reproduce()`, `remove()` and `external_entry()` are the only ways to create or remove
+agents. Expressions have no access to the model, so these actions can only come from a
+module.
+
+None of the three acts immediately. Each queues a lifecycle event, and all queued events
+are applied at the end of the step. This avoids changing the population while the step
+is still running.
+
+A module that removes agents on a condition, or with a probability, evaluates that
+condition itself in Python and then calls `remove()`. No wrapper such as
+`remove_if()` is provided.
+
+<Callout title="Events" type="info">
+Each applied event is recorded in the event log. An `agent_created` event carries a
+`via` field of `"reproduction"`, `"external_entry"` or `"initial"`.
+</Callout>
+
+---
+
+## Reading and writing neighbours
+
+A module reaches neighbours only through a `NeighbourAccessor`. The simulation creates
+a new accessor for each call to a module and passes it in. A module never receives a
+direct reference to the state of another agent.
+
+### Reads
+
+Reads come from a source chosen by the `read_mode` of the [scheduler](/docs/scheduler):
+
+| `read_mode` | Reads see |
+|---|---|
+| `frozen` | The population as it was at the start of the step. |
+| `live` | The population as it is at the moment of the read. |
+
+### Writes
+
+The `write_mode` of the module entry decides how a write to a neighbour is applied. It is
+independent of `read_mode`.
+
+| `write_mode` | Behaviour |
+|---|---|
+| `deferred` | The write is recorded and applied at the end of the step. |
+| `immediate` | The write is applied to the live population at once. |
+
+<Callout title="Order dependence" type="info">
+With `immediate` writes or `live` reads, the result can depend on the order in which
+agents act. With `frozen` reads and `deferred` writes it does not.
+</Callout>
+
+<Callout title="To confirm" type="warn">
+Add the signatures of the accessor's read and write methods.
+</Callout>

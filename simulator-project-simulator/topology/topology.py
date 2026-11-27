@@ -50,158 +50,159 @@ from runner.soa import SoAPopulation
 # Protocol
 # ---------------------------------------------------------------------------
 
+
 @runtime_checkable
 class TopologyProtocol(Protocol):
-    """Structural interface for all topology implementations.
+	"""Structural interface for all topology implementations.
 
-    Any class implementing get_neighbours and from_config satisfies
-    this Protocol — no inheritance required.
+	Any class implementing get_neighbours and from_config satisfies
+	this Protocol — no inheritance required.
 
-    @runtime_checkable allows isinstance() checks at runtime, useful
-    for factory validation and testing.
-    """
+	@runtime_checkable allows isinstance() checks at runtime, useful
+	for factory validation and testing.
+	"""
 
-    def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:
-        """Return list of agent ID strings that are neighbours of agent_id.
+	def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:
+		"""Return list of agent ID strings that are neighbours of agent_id.
 
-        Called once per agent per simulation step. Behaviour modules
-        consume this list without knowing which topology is active.
+		Called once per agent per simulation step. Behaviour modules
+		consume this list without knowing which topology is active.
 
-        Self-interaction is excluded by default across all implementations.
+		Self-interaction is excluded by default across all implementations.
 
-        Args:
-            agent_id: the ID of the focal agent
-            soa: the current SoAPopulation
+		Args:
+		    agent_id: the ID of the focal agent
+		    soa: the current SoAPopulation
 
-        Returns:
-            list of neighbour agent ID strings
-        """
-        ...
+		Returns:
+		    list of neighbour agent ID strings
+		"""
+		...
 
-    @classmethod
-    def from_config(cls, config: dict, soa: SoAPopulation) -> "TopologyProtocol":
-        """Construct this topology from a config dict section.
+	@classmethod
+	def from_config(cls, config: dict, soa: SoAPopulation) -> 'TopologyProtocol':
+		"""Construct this topology from a config dict section.
 
-        Each implementation parses its own relevant keys from config.
-        soa is required by NetworkTopology for graph node relabelling
-        and validation; other implementations may ignore it.
+		Each implementation parses its own relevant keys from config.
+		soa is required by NetworkTopology for graph node relabelling
+		and validation; other implementations may ignore it.
 
-        Args:
-            config: the config section for this topology
-            soa: the current SoAPopulation
-        """
-        ...
+		Args:
+		    config: the config section for this topology
+		    soa: the current SoAPopulation
+		"""
+		...
 
 
 # ---------------------------------------------------------------------------
 # Shared validation
 # ---------------------------------------------------------------------------
 
+
 def validate_agent_types(agent_types: list[str] | None, soa: SoAPopulation) -> None:
-    """Validate that every type name in agent_types exists in the SoAPopulation.
+	"""Validate that every type name in agent_types exists in the SoAPopulation.
 
-    Shared across all_pairs, random_sample, and network topology implementations
-    to keep validation behaviour consistent. Raises loudly rather than silently
-    filtering to an empty neighbour list, which would otherwise be very hard
-    to debug (e.g. a typo'd agent type name silently produces an empty
-    simulation with no error).
+	Shared across all_pairs, random_sample, and network topology implementations
+	to keep validation behaviour consistent. Raises loudly rather than silently
+	filtering to an empty neighbour list, which would otherwise be very hard
+	to debug (e.g. a typo'd agent type name silently produces an empty
+	simulation with no error).
 
-    Args:
-        agent_types: list of agent type names to validate, or None (no-op)
-        soa: the current SoAPopulation, used as the source of truth for
-             which agent types actually exist
+	Args:
+	    agent_types: list of agent type names to validate, or None (no-op)
+	    soa: the current SoAPopulation, used as the source of truth for
+	         which agent types actually exist
 
-    Raises:
-        ValueError: if any name in agent_types is not a known agent type in soa
-    """
-    if agent_types is None:
-        return
+	Raises:
+	    ValueError: if any name in agent_types is not a known agent type in soa
+	"""
+	if agent_types is None:
+		return
 
-    known_types = set(soa.keys())
-    unknown = [t for t in agent_types if t not in known_types]
+	known_types = set(soa.keys())
+	unknown = [t for t in agent_types if t not in known_types]
 
-    if unknown:
-        raise ValueError(
-            f"agent_types contains unknown type(s): {unknown}. "
-            f"Known agent types in population: {sorted(known_types)}"
-        )
+	if unknown:
+		raise ValueError(
+			f'agent_types contains unknown type(s): {unknown}. Known agent types in population: {sorted(known_types)}'
+		)
 
 
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
-def build_topologies(config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None) -> dict[str, TopologyProtocol]:
-    """Factory — reads the 'topologies' section of the simulation config
-    and returns a dict of named topology instances.
 
-    Args:
-        config: the full simulation config dict containing a 'topologies' section
-        soa: the current SoAPopulation, passed through to topology constructors
-        rng: shared seeded generator (typically from Simulation.from_config).
-             Forwarded to every topology's from_config — topologies that use
-             randomness (currently RandomSampleTopology) draw from this
-             shared generator rather than building their own, so the whole
-             simulation stays reproducible under one seed.
+def build_topologies(
+	config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None
+) -> dict[str, TopologyProtocol]:
+	"""Factory — reads the 'topologies' section of the simulation config
+	and returns a dict of named topology instances.
 
-    Returns:
-        dict mapping topology name to topology instance, e.g.
-        {
-            "contact": NetworkTopology(...),
-            "social": RandomSampleTopology(k=5),
-        }
+	Args:
+	    config: the full simulation config dict containing a 'topologies' section
+	    soa: the current SoAPopulation, passed through to topology constructors
+	    rng: shared seeded generator (typically from Simulation.from_config).
+	         Forwarded to every topology's from_config — topologies that use
+	         randomness (currently RandomSampleTopology) draw from this
+	         shared generator rather than building their own, so the whole
+	         simulation stays reproducible under one seed.
 
-    Raises:
-        ValueError: if 'topologies' section is missing or empty
-    """
-    topologies_config = config.get("topologies", {})
-    if not topologies_config:
-        raise ValueError(
-            "Config must contain a 'topologies' section with at least one topology."
-        )
+	Returns:
+	    dict mapping topology name to topology instance, e.g.
+	    {
+	        "contact": NetworkTopology(...),
+	        "social": RandomSampleTopology(k=5),
+	    }
 
-    return {
-        name: _build_single_topology(name, topology_config, soa, rng)
-        for name, topology_config in topologies_config.items()
-    }
+	Raises:
+	    ValueError: if 'topologies' section is missing or empty
+	"""
+	topologies_config = config.get('topologies', {})
+	if not topologies_config:
+		raise ValueError("Config must contain a 'topologies' section with at least one topology.")
+
+	return {
+		name: _build_single_topology(name, topology_config, soa, rng)
+		for name, topology_config in topologies_config.items()
+	}
 
 
 def _build_single_topology(
-    name: str,
-    config: dict,
-    soa: SoAPopulation,
-    rng: np.random.Generator | None = None
+	name: str, config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None
 ) -> TopologyProtocol:
-    """Internal factory — constructs a single topology from its config section.
+	"""Internal factory — constructs a single topology from its config section.
 
-    Lazy imports avoid circular dependencies between topology modules.
+	Lazy imports avoid circular dependencies between topology modules.
 
-    Args:
-        name: the topology name (used in error messages)
-        config: the config section for this topology
-        soa: the current SoAPopulation
-        rng: shared seeded generator, forwarded to whichever from_config
-            implementation gets selected below.
+	Args:
+	    name: the topology name (used in error messages)
+	    config: the config section for this topology
+	    soa: the current SoAPopulation
+	    rng: shared seeded generator, forwarded to whichever from_config
+	        implementation gets selected below.
 
-    Raises:
-        ValueError: if mode is unknown or missing
-    """
-    mode = config.get("mode")
+	Raises:
+	    ValueError: if mode is unknown or missing
+	"""
+	mode = config.get('mode')
 
-    if mode == "all_pairs":
-        from topology.all_pairs import AllPairsTopology
-        return AllPairsTopology.from_config(config, soa, rng)
+	if mode == 'all_pairs':
+		from topology.all_pairs import AllPairsTopology
 
-    elif mode == "random_sample":
-        from topology.random_sample import RandomSampleTopology
-        return RandomSampleTopology.from_config(config, soa, rng)
+		return AllPairsTopology.from_config(config, soa, rng)
 
-    elif mode == "network":
-        from topology.network import NetworkTopology
-        return NetworkTopology.from_config(config, soa, rng)
+	elif mode == 'random_sample':
+		from topology.random_sample import RandomSampleTopology
 
-    else:
-        raise ValueError(
-            f"Topology '{name}' has unknown mode '{mode}'. "
-            f"Expected one of: all_pairs, random_sample, network."
-        )
+		return RandomSampleTopology.from_config(config, soa, rng)
+
+	elif mode == 'network':
+		from topology.network import NetworkTopology
+
+		return NetworkTopology.from_config(config, soa, rng)
+
+	else:
+		raise ValueError(
+			f"Topology '{name}' has unknown mode '{mode}'. Expected one of: all_pairs, random_sample, network."
+		)

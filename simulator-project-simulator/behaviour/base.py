@@ -37,49 +37,49 @@ from behaviour.model import Model
 
 @runtime_checkable
 class BehaviourModule(Protocol):
-    """Structural interface for all behaviour modules.
+	"""Structural interface for all behaviour modules.
 
-    Any class implementing apply() satisfies this Protocol — no inheritance
-    required. Each subclass defines its own __init__ for module-specific
-    parameters (e.g. infection_rate, kill_probability).
-    """
+	Any class implementing apply() satisfies this Protocol — no inheritance
+	required. Each subclass defines its own __init__ for module-specific
+	parameters (e.g. infection_rate, kill_probability).
+	"""
 
-    def apply(
-        self,
-        agent: AgentState,
-        neighbours: list[str],
-        accessor: NeighbourAccessor,
-        model: Model,
-    ) -> None:
-        """Apply this module's logic for a single agent, for one step.
+	def apply(
+		self,
+		agent: AgentState,
+		neighbours: list[str],
+		accessor: NeighbourAccessor,
+		model: Model,
+	) -> None:
+		"""Apply this module's logic for a single agent, for one step.
 
-        Called once per agent per step, in the order this module appears
-        in the agent type's behaviour sequence (config-defined order).
+		Called once per agent per step, in the order this module appears
+		in the agent type's behaviour sequence (config-defined order).
 
-        Within one agent's own sequence, this module's mutations to `agent`
-        are immediately visible to later modules in the same sequence for
-        the same agent (self-writes are always live, not deferred — see
-        S-05 ticket notes). Mutations to neighbours go through `accessor`,
-        whose read/write behaviour is determined by config (write_mode),
-        not by this module.
+		Within one agent's own sequence, this module's mutations to `agent`
+		are immediately visible to later modules in the same sequence for
+		the same agent (self-writes are always live, not deferred — see
+		S-05 ticket notes). Mutations to neighbours go through `accessor`,
+		whose read/write behaviour is determined by config (write_mode),
+		not by this module.
 
-        Args:
-            agent: the AgentState for the agent currently being processed.
-                   Mutating agent.state directly is always live — visible
-                   to the next module in this agent's sequence immediately.
-            neighbours: list of neighbour agent ID strings, resolved from
-                        this module's bound topology (topology_name in
-                        config). Empty list if this module doesn't use
-                        neighbours (no topology_name set).
-            accessor: NeighbourAccessor for reading/writing neighbour state.
-                      Reads always return strict start-of-step (t-1) values.
-                      Writes are applied immediately or deferred to step-end
-                      depending on this module's configured write_mode —
-                      the module has no visibility into which mode is active.
-            model: the simulation-level context object (see model.py) —
-                   gives access to step number, full population, global
-                   parameters, shared RNG, and event logging. params and
-                   rng are backed by S-11 (SimulationConfig.params/.seed);
-                   log_event's real persistence is still pending S-09 —
-                   see model.py for details.
-        """
+		Args:
+		    agent: the AgentState for the agent currently being processed.
+		           Mutating agent.state directly is always live — visible
+		           to the next module in this agent's sequence immediately.
+		    neighbours: list of neighbour agent ID strings, resolved from
+		                this module's bound topology (topology_name in
+		                config). Empty list if this module doesn't use
+		                neighbours (no topology_name set).
+		    accessor: NeighbourAccessor for reading/writing neighbour state.
+		              Reads always return strict start-of-step (t-1) values.
+		              Writes are applied immediately or deferred to step-end
+		              depending on this module's configured write_mode —
+		              the module has no visibility into which mode is active.
+		    model: the simulation-level context object (see model.py) —
+		           gives access to step number, full population, global
+		           parameters, shared RNG, and event logging. params and
+		           rng are backed by S-11 (SimulationConfig.params/.seed);
+		           log_event's real persistence is still pending S-09 —
+		           see model.py for details.
+		"""

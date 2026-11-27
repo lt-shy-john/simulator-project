@@ -1,0 +1,153 @@
+---
+title: Creating Agents
+description: Describe your agents.
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+ 
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+## The idea
+ 
+Before a village can come alive, someone has to decide who lives there. How many
+people are there? Are they farmers and shopkeepers, or just villagers? What does each
+person carry around: an age, some savings, a state of health?
+ 
+In the simulation, you answer those questions by creating **agent types**. An agent
+type is a blueprint. Say "1,000 people, each with an age and a health status", and the
+simulation builds 1,000 agents from it.
+ 
+<Callout title="In short" type="info">
+An agent type needs a **name**, a **count**, a **generation mode** and a list of
+**attributes**. The attributes are the things each agent knows about itself.
+</Callout>
+## Step by step
+ 
+<Steps>
+  <Step>
+    **Name the type and say how many.** Pick a name such as `person`, and a count such
+    as `1000`. The count must be at least 1.
+  </Step>
+  <Step>
+    **Decide whether agents are alike or different.** Choose a generation mode:
+    `homogeneous` or `heterogeneous`.
+  </Step>
+  <Step>
+    **List the attributes.** Give each one a name and a type: `int`, `float`, `bool` or
+    `categorical`.
+  </Step>
+  <Step>
+    **Say how the values are filled in.** For each attribute, choose a population
+    method, such as drawing from a distribution.
+  </Step>
+</Steps>
+## Your first agent type
+ 
+```json
+"agent_types": [
+  {
+    "name": "person",
+    "count": 1000,
+    "generation_mode": "heterogeneous",
+    "attributes": [
+      {
+        "name": "age",
+        "type": "int",
+        "population_method": "distribution",
+        "distribution": { "kind": "uniform", "low": 18, "high": 80 }
+      },
+      {
+        "name": "status",
+        "type": "categorical",
+        "population_method": "distribution",
+        "distribution": { "kind": "categorical", "weights": { "S": 0.99, "I": 0.01 } }
+      }
+    ]
+  }
+]
+```
+ 
+Reading it aloud: *"There are 1,000 people. Each person's age is somewhere between 18
+and 80, with every age equally likely. Ninety-nine in a hundred start healthy
+(`S`, susceptible), and one in a hundred starts infected (`I`)."*
+ 
+<Callout title="Names matter" type="info">
+The attribute names you choose here are the names your rules use. An attribute called
+`age` is read as `state['age']`. A rule can only change attributes that exist, so define
+everything an agent needs to remember here.
+</Callout>
+<Callout title="To confirm" type="warn">
+This page does not yet explain what `homogeneous` does differently from
+`heterogeneous`. Add it once confirmed.
+</Callout>
+## Choosing how values are filled in
+ 
+Each attribute has a **population method**. It answers: where do the starting values
+come from?
+ 
+<Cards>
+  <Card title="distribution">
+    Values are drawn at random from a distribution you describe. This is the usual
+    choice for large populations.
+  </Card>
+  <Card title="manual">
+    You enter the values yourself, one at a time. Useful when you have only a few
+    agents, or want exact control.
+  </Card>
+  <Card title="bulk_upload">
+    The values come from a file. The simulation writes a template for you to fill in
+    and loads it back.
+  </Card>
+</Cards>
+You can also leave an attribute without a population method. It is then *defined but
+not yet filled in*, like a form with the headings written and no answers yet.
+ 
+## Choosing a distribution
+ 
+A distribution describes the shape of the starting values. Here are the options, with
+a real-life example of each.
+ 
+| Distribution | Think of it as | Example |
+|---|---|---|
+| `fixed` | Everyone gets the same value | Everyone starts with 100 coins |
+| `uniform` | Every value in a range is equally likely | Ages anywhere from 18 to 80 |
+| `normal` | Most values near an average, a few far away | Heights: most people near average, few very tall or short |
+| `binomial` | How many of `n` tries succeed | How many of 10 coin flips land heads |
+| `categorical` | Picking a label with set chances | 99% healthy, 1% infected |
+ 
+```json
+{ "kind": "fixed", "value": 100 }
+{ "kind": "uniform", "low": 18, "high": 80 }
+{ "kind": "normal", "mean": 170, "stddev": 10 }
+{ "kind": "binomial", "n": 10, "prob": 0.5 }
+{ "kind": "categorical", "weights": { "S": 0.99, "I": 0.01 } }
+```
+ 
+A `poisson` distribution is also available. See the
+[reference](/docs/creating-agents-reference#poisson) for its settings.
+ 
+## Starting from a spreadsheet
+ 
+If you already have data, such as a table of real people, you can load rows from a CSV
+file. Rows take the place of generated agents, up to the `count` of the type.
+ 
+- **More rows than `count`:** the extra rows are ignored, with a warning.
+- **Fewer rows than `count`:** the rest are generated from the distributions.
+- **A column that matches no attribute:** it is ignored, with a warning.
+## Common mistakes
+ 
+| What happened | Why |
+|---|---|
+| The configuration is rejected with `count must be > 0` | A type needs at least one agent. |
+| Duplicate attribute names are rejected | Two attributes of one type share a name. |
+| `uniform` is rejected | `low` is larger than `high`. |
+| `binomial` is rejected | `prob` is not between 0 and 1. |
+| `normal` is rejected | `stddev` is negative. |
+| `categorical` is rejected | The weights are empty, or one of them is negative. |
+ 
+## What next
+ 
+- Decide who knows whom: [Topologies](/docs/topologies).
+- Give your agents something to do: [Behaviour Expressions](/docs/behaviour-expression).
+- Every setting in detail: [Creating Agents Reference](/docs/creating-agents-reference).

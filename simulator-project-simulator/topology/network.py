@@ -48,115 +48,114 @@ from topology.topology import validate_agent_types
 
 
 class NetworkTopology:
-    """Topology implementation that returns graph-adjacent agents as neighbours.
+	"""Topology implementation that returns graph-adjacent agents as neighbours.
 
-    Satisfies TopologyProtocol structurally — no inheritance needed.
+	Satisfies TopologyProtocol structurally — no inheritance needed.
 
-    The graph is built once at construction time and reused each step.
-    For dynamic rewiring (agents forming/dropping connections mid-simulation),
-    see S-03b.
-    """
+	The graph is built once at construction time and reused each step.
+	For dynamic rewiring (agents forming/dropping connections mid-simulation),
+	see S-03b.
+	"""
 
-    def __init__(self, graph: nx.Graph, agent_types: list[str] | None = None, _source_config: dict | None = None):
-        """
-        Args:
-            graph: a NetworkX Graph with UUID string node labels matching
-                   agent IDs in the SoAPopulation
-            agent_types: if set, only neighbours of these types are returned.
-                         If None, all types are included.
-            _source_config: config dict for this topology instance
-        """
-        self.graph = graph
-        self.agent_types = agent_types
-        self._source_config = _source_config  # retained verbatim for to_config()
+	def __init__(
+		self,
+		graph: nx.Graph,
+		agent_types: list[str] | None = None,
+		_source_config: dict | None = None,
+	):
+		"""
+		Args:
+		    graph: a NetworkX Graph with UUID string node labels matching
+		           agent IDs in the SoAPopulation
+		    agent_types: if set, only neighbours of these types are returned.
+		                 If None, all types are included.
+		    _source_config: config dict for this topology instance
+		"""
+		self.graph = graph
+		self.agent_types = agent_types
+		self._source_config = _source_config  # retained verbatim for to_config()
 
-    @classmethod
-    def from_config(cls, config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None) -> "NetworkTopology":
-        """Construct from a topology config section.
+	@classmethod
+	def from_config(cls, config: dict, soa: SoAPopulation, rng: np.random.Generator | None = None) -> 'NetworkTopology':
+		"""Construct from a topology config section.
 
-        Builds or loads the graph via graph_builder, then constructs
-        the NetworkTopology instance.
+		Builds or loads the graph via graph_builder, then constructs
+		the NetworkTopology instance.
 
-        Args:
-            config: the config dict for this topology, e.g.
-                {
-                    "mode": "network",
-                    "agent_types": ["person"],
-                    "graph": {
-                        "type": "erdos_renyi",
-                        "n": 1000,
-                        "p": 0.05,
-                        "seed": 42
-                    }
-                }
-            soa: the current SoAPopulation, needed by graph_builder for
-                 node relabelling and validation
-            rng: shared seeded generator (typically from Simulation.from_config).
-                 When provided, takes priority over this topology's own
-                 config-level 'seed' — this is how a single simulation-wide
-                 seed flows into every topology consistently. If omitted,
-                 falls back to a generator built from config['seed'], for
-                 topology-only reproducibility when used standalone.
+		Args:
+		    config: the config dict for this topology, e.g.
+		        {
+		            "mode": "network",
+		            "agent_types": ["person"],
+		            "graph": {
+		                "type": "erdos_renyi",
+		                "n": 1000,
+		                "p": 0.05,
+		                "seed": 42
+		            }
+		        }
+		    soa: the current SoAPopulation, needed by graph_builder for
+		         node relabelling and validation
+		    rng: shared seeded generator (typically from Simulation.from_config).
+		         When provided, takes priority over this topology's own
+		         config-level 'seed' — this is how a single simulation-wide
+		         seed flows into every topology consistently. If omitted,
+		         falls back to a generator built from config['seed'], for
+		         topology-only reproducibility when used standalone.
 
-        Raises:
-            ValueError: if 'graph' section is missing from config, or if
-                agent_types contains a type not present in soa
-        """
-        if "graph" not in config:
-            raise ValueError(
-                "Network topology config must contain a 'graph' section."
-            )
+		Raises:
+		    ValueError: if 'graph' section is missing from config, or if
+		        agent_types contains a type not present in soa
+		"""
+		if 'graph' not in config:
+			raise ValueError("Network topology config must contain a 'graph' section.")
 
-        agent_types = config.get("agent_types", None)
-        validate_agent_types(agent_types, soa)
+		agent_types = config.get('agent_types', None)
+		validate_agent_types(agent_types, soa)
 
-        raw_graph_config = config["graph"]
-        graph = build_graph(raw_graph_config, soa)
+		raw_graph_config = config['graph']
+		graph = build_graph(raw_graph_config, soa)
 
-        # For bring-your-own graphs, graph_to_config() replaces the file
-        # path with literal node-link data so to_config() is self-contained.
-        # For generated graphs, it echoes source_config unchanged.
-        safe_graph_config = graph_to_config(graph, raw_graph_config)
+		# For bring-your-own graphs, graph_to_config() replaces the file
+		# path with literal node-link data so to_config() is self-contained.
+		# For generated graphs, it echoes source_config unchanged.
+		safe_graph_config = graph_to_config(graph, raw_graph_config)
 
-        return cls(
-            graph=graph,
-            agent_types=agent_types,
-            _source_config=safe_graph_config
-        )
+		return cls(graph=graph, agent_types=agent_types, _source_config=safe_graph_config)
 
-    def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:
-        """Return graph-adjacent agent IDs for the given agent.
+	def get_neighbours(self, agent_id: str, soa: SoAPopulation) -> list[str]:
+		"""Return graph-adjacent agent IDs for the given agent.
 
-        Looks up neighbours directly from the NetworkX graph using
-        agent_id as the node label. Filters by agent_types if specified.
+		Looks up neighbours directly from the NetworkX graph using
+		agent_id as the node label. Filters by agent_types if specified.
 
-        Args:
-            agent_id: the ID of the focal agent
-            soa: the current SoAPopulation (used for agent_types filtering)
+		Args:
+		    agent_id: the ID of the focal agent
+		    soa: the current SoAPopulation (used for agent_types filtering)
 
-        Returns:
-            list of neighbour agent ID strings. Empty list if the agent
-            has no edges in the graph or is not in the graph.
-        """
-        if agent_id not in self.graph:
-            return []
+		Returns:
+		    list of neighbour agent ID strings. Empty list if the agent
+		    has no edges in the graph or is not in the graph.
+		"""
+		if agent_id not in self.graph:
+			return []
 
-        # Get graph-adjacent node IDs.
-        raw_neighbours = [str(n) for n in self.graph.neighbors(agent_id)]
+		# Get graph-adjacent node IDs.
+		raw_neighbours = [str(n) for n in self.graph.neighbors(agent_id)]
 
-        if self.agent_types is None:
-            return raw_neighbours
+		if self.agent_types is None:
+			return raw_neighbours
 
-        # Filter by agent_types — build a set of IDs belonging to
-        # allowed types from the SoA for O(1) membership check.
-        allowed_ids = self._get_allowed_ids(soa)
-        return [n for n in raw_neighbours if n in allowed_ids]
+		# Filter by agent_types — build a set of IDs belonging to
+		# allowed types from the SoA for O(1) membership check.
+		allowed_ids = self._get_allowed_ids(soa)
+		return [n for n in raw_neighbours if n in allowed_ids]
 
-    def _get_allowed_ids(self, soa: SoAPopulation) -> set[str]:
-        """Build a set of agent IDs belonging to allowed agent_types."""
-        allowed: set[str] = set()
-        for type_name, arrays in soa.items():
-            if self.agent_types is not None and type_name not in self.agent_types:
-                continue
-            allowed.update(str(id_) for id_ in arrays[ID_KEY])
-        return allowed
+	def _get_allowed_ids(self, soa: SoAPopulation) -> set[str]:
+		"""Build a set of agent IDs belonging to allowed agent_types."""
+		allowed: set[str] = set()
+		for type_name, arrays in soa.items():
+			if self.agent_types is not None and type_name not in self.agent_types:
+				continue
+			allowed.update(str(id_) for id_ in arrays[ID_KEY])
+		return allowed

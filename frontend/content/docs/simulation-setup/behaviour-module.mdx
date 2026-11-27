@@ -1,0 +1,154 @@
+---
+title: Behaviour Modules
+description: Describe how your agents behave using modules.
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+ 
+<Callout title="Draft" type="warn">
+	Will need to review this page later.
+</Callout>
+## The idea
+ 
+A behaviour rule is a recipe card: short, simple, and always about *you*. Most of what
+your agents do fits on one.
+ 
+Sometimes it doesn't. Maybe a villager should hand part of their food to a neighbour.
+Maybe a family should have a child, or someone should move away. A card can't do that.
+You need a specialist, someone who can act on other people and change who lives in the
+village.
+ 
+A **behaviour module** is that specialist. You write it in Python, give it a name, and
+the simulation calls it.
+ 
+<Callout title="Rule or module?" type="info">
+Start with a [rule](/docs/behaviour-expression). Use a module only when a rule can't do
+the job.
+</Callout>
+| I want to... | Rule | Module |
+|---|---|---|
+| Change my own attributes | Yes | Yes |
+| React to my neighbours | Yes | Yes |
+| Change my neighbours' attributes | No | Yes |
+| Add or remove agents | No | Yes |
+| Write any Python logic I like | No | Yes |
+ 
+## Step by step
+ 
+<Steps>
+  <Step>
+    **Write the module.** It is a Python class that describes the behaviour.
+  </Step>
+  <Step>
+    **Register it under a name.** A small decorator makes it findable.
+  </Step>
+  <Step>
+    **Make sure the file is imported.** A module that is never imported is never
+    registered.
+  </Step>
+  <Step>
+    **Add it to your agent type's behaviours.** Use its name in the configuration.
+  </Step>
+</Steps>
+## Writing and registering a module
+ 
+```python
+from simulator.behaviour.registry import register_behaviour
+from simulator.behaviour.module import BehaviourModule  # confirm this import path
+ 
+ 
+@register_behaviour("SIRInfection")
+class SIRInfection(BehaviourModule):
+    """Moves susceptible agents to infected based on infected neighbours."""
+ 
+    def __init__(self, rate: float = 0.3):
+        """Store the settings given in the configuration.
+ 
+        Args:
+            rate: the chance of infection from one infected neighbour.
+        """
+        self.rate = rate
+ 
+    # The apply() method, which holds the behaviour itself, goes here.
+```
+ 
+<Callout title="To confirm" type="warn">
+This page does not yet show the `apply()` method, which holds the behaviour. Add its
+signature and an example of reading and writing neighbours once confirmed.
+</Callout>
+The name inside `register_behaviour("SIRInfection")` is what you use in your
+configuration. Names must be unique. Registering a different class under a name that is
+already taken is an error, so a custom module can never quietly replace a built-in one.
+ 
+<Callout title="The number one gotcha" type="warn">
+The decorator only runs when Python imports the file. If your module is not found,
+check first that something imports its file. In a folder of modules, the `__init__.py`
+must import every module file in it, even if it uses none of them directly.
+</Callout>
+## Adding it to the configuration
+ 
+```json
+"behaviours": {
+  "person": [
+    { "module": "SIRInfection", "params": { "rate": 0.3 } }
+  ]
+}
+```
+ 
+*"Every person follows the SIRInfection module, with a rate of 0.3."*
+ 
+- **`module`** is the registered name.
+- **`params`** is a set of options. Each one is passed to your class as a keyword
+  argument, so `{"rate": 0.3}` becomes `SIRInfection(rate=0.3)`. The class must accept
+  every key you give.
+- **`write_mode`** is optional. See below.
+Modules and rules can sit in the same list.
+ 
+## Talking to your neighbours
+ 
+A module never touches another agent directly. It goes through a **neighbour
+accessor**, like asking at the village post office. Two settings control how it works.
+ 
+<Cards>
+  <Card title="What you read: set by the scheduler">
+    With `read_mode: frozen`, everyone reads the village as it was at the **start of the
+    step**, like a photo taken at sunrise. With `live`, you read it as it is right now.
+  </Card>
+  <Card title="What you write: set by write_mode">
+    With `deferred` (the default), a change to a neighbour is written on a note and
+    applied at the **end of the step**. With `immediate`, it is applied straight away.
+  </Card>
+</Cards>
+```json
+{ "module": "ShareFood", "params": {}, "write_mode": "immediate" }
+```
+ 
+<Callout title="Which should I choose?" type="info">
+`frozen` reads with `deferred` writes give the same result whichever agent acts first.
+`live` reads or `immediate` writes can depend on the order of agents, so they are
+harder to reason about. Choose them only when you want that behaviour.
+</Callout>
+## Adding and removing agents
+ 
+A module can have an agent reproduce, remove an agent, or let a new agent arrive from
+outside. These requests are **queued** and carried out at the end of the step, so the
+village isn't rearranged while people are still walking around in it.
+ 
+There is no ready-made "remove with probability" helper. You write the condition in
+Python, then ask for the removal:
+ 
+```python
+# Sketch of the idea, written inside a module's apply() method.
+# The exact arguments of model.remove() are to be confirmed.
+if agent_is_too_old and model.rng.random() < 0.1:
+    model.remove(agent_id)
+```
+ 
+<Callout title="Every change is recorded" type="info">
+Each creation and removal is written to the event log. A creation notes how it
+happened: `reproduction`, `external_entry` or `initial`.
+</Callout>
+## What next
+ 
+- Choose who acts, and in what order: [Scheduler](/docs/scheduler).
+- Every detail: [Behaviour Modules Reference](/docs/behaviour-modules-reference).
